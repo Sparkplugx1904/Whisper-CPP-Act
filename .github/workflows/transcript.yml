@@ -9,36 +9,27 @@ on:
 jobs:
   transcribe:
     runs-on: ubuntu-latest
+
     steps:
-      # 1️⃣ Checkout repo supaya ada whisper-cli dan models
+      # 1️⃣ Checkout repo
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 2️⃣ Show directory awal (opsional)
-      - name: Show Dir
-        run: |
-          ls -lR
+      # 2️⃣ Setup FFmpeg
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
 
-      - name: Setup FFmpeg (static binary)
-        run: |
-          mkdir -p ffmpeg
-          curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o ffmpeg.tar.xz
-          tar -xf ffmpeg.tar.xz --strip-components=1 -C ffmpeg
-          chmod +x ffmpeg/ffmpeg ffmpeg/ffprobe     # <-- tambahkan ini
-          echo "$PWD/ffmpeg" >> $GITHUB_PATH
-
-      # 3️⃣ Setup
-      - name: Setup dependencies
+      # 3️⃣ Install dependencies
+      - name: Install Python dependencies
         run: |
           pip install requests pydub
-          # curl -L -o ./ffmpeg https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffmpeg
-          # curl -L -o ./ffprobe https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffprobe
-          # chmod +x ./ffmpeg ./ffprobe
 
       # 4️⃣ Transcribe audio
-      - name: Transcribe audio
+      - name: Run transcriptor
         run: |
-          python3 transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251101-183024/VOT-Denpasar_01-11-25-2.mp3" medium
+          python3 transcriptor_cpp.py \
+            "https://archive.org/download/vot-denpasar-20251101-183024/VOT-Denpasar_01-11-25-2.mp3" \
+            medium
 
       # 5️⃣ Upload hasil transkrip sebagai artifact
       - name: Upload transcript artifact
