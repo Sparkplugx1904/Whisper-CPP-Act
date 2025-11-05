@@ -36,12 +36,6 @@ from pydub.utils import which
 def split_audio(input_path, output_dir, chunk_length_ms=10*60*1000):
     print(f"[+] Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
 
-    # 🔹 Set ffmpeg/ffprobe dari folder saat ini
-    current_folder = os.getcwd()
-
-    AudioSegment.converter = os.path.join(current_folder, "./ffmpeg")
-    AudioSegment.ffprobe = os.path.join(current_folder, "./ffprobe")
-
     # 🔹 Load audio
     audio = AudioSegment.from_file(input_path)
 
