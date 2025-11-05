@@ -1,0 +1,40 @@
+name: Transcript Audio VOT
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    steps:
+      # 1️⃣ Checkout repo supaya ada whisper-cli dan models
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2️⃣ Show directory awal (opsional)
+      - name: Show Dir
+        run: |
+          ls -lR
+
+      # 3️⃣ Setup
+      - name: Setup dependencies
+        run: |
+          pip install requests pydub
+          curl -L -o ./ffmpeg https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffmpeg
+          curl -L -o ./ffprobe https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffprobe
+          chmod +x ./ffmpeg ./ffprobe
+
+      # 4️⃣ Transcribe audio
+      - name: Transcribe audio
+        run: |
+          python3 transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251101-183024/VOT-Denpasar_01-11-25-2.mp3" medium
+
+      # 5️⃣ Upload hasil transkrip sebagai artifact
+      - name: Upload transcript artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vot-transcript
+          path: transcripts/
