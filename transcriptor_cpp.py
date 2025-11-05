@@ -120,8 +120,8 @@ def main():
     model_path = ensure_model_exists(model_name)
     audio_path = Path("audio.mp3")
     download_audio(url, audio_path)
-    chunk_files = split_audio(audio_path, "chunks")
-    all_text = transcribe_with_whisper_cpp(chunk_files, model_path)
+    chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")  # ← ubah di sini
+    all_text = transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)  # ← dan di sini
     combine_transcripts(all_text)
     final_output = "./transcripts/audio.mp3.txt"
     os.rename("./transcripts/final_transcript.txt", final_output)
