@@ -30,9 +30,9 @@ jobs:
       - name: Setup dependencies
         run: |
           pip install requests pydub
-          curl -L -o ./ffmpeg https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffmpeg
-          curl -L -o ./ffprobe https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffprobe
-          chmod +x ./ffmpeg ./ffprobe
+          # curl -L -o ./ffmpeg https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffmpeg
+          # curl -L -o ./ffprobe https://github.com/Sparkplugx1904/whisper.cpp/raw/refs/heads/main/ffprobe
+          # chmod +x ./ffmpeg ./ffprobe
 
       # 4️⃣ Transcribe audio
       - name: Transcribe audio
