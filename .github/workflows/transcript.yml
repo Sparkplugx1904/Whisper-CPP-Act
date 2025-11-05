@@ -24,6 +24,7 @@ jobs:
           mkdir -p ffmpeg
           curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o ffmpeg.tar.xz
           tar -xf ffmpeg.tar.xz --strip-components=1 -C ffmpeg
+          chmod +x ffmpeg/ffmpeg ffmpeg/ffprobe     # <-- tambahkan ini
           echo "$PWD/ffmpeg" >> $GITHUB_PATH
 
       # 3️⃣ Setup
