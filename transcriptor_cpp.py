@@ -31,11 +31,8 @@ def download_audio(url, output_path):
     print(f"[+] Mengunduh audio dari: {url}")
     download_file(url, output_path)
 
-import os
-from pydub import AudioSegment
-from pydub.utils import which
 
-def split_audio(input_path, output_dir, chunk_length_ms=180*60*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=10*60*1000):
     print(f"[+] Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
 
     # 🔹 Load audio
@@ -78,6 +75,7 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
             "-f", chunk,
             "-otxt",
             "-l", "id",
+            "--no-translate",
             "-pp"
         ]
         subprocess.run(cmd, check=True)

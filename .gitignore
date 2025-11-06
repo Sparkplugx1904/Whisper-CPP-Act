@@ -2,3 +2,5 @@ ffmpeg
 ffprobe
 push
 audio.mp3
+chunks
+transcripts
