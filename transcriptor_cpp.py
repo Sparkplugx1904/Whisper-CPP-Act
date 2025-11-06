@@ -75,7 +75,6 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
             "-f", chunk,
             "-otxt",
             "-l", "id",
-            "--no-translate",
             "-pp"
         ]
         subprocess.run(cmd, check=True)
