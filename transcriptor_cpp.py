@@ -35,7 +35,7 @@ import os
 from pydub import AudioSegment
 from pydub.utils import which
 
-def split_audio(input_path, output_dir, chunk_length_ms=10*60*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=180*60*1000):
     print(f"[+] Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
 
     # 🔹 Load audio
