@@ -2,8 +2,10 @@
 import sys
 import os
 import subprocess
+import glob
 from pathlib import Path
 from pydub import AudioSegment
+from pydub.utils import which
 
 def download_file(url, dest):
     print(f"[+] Mengunduh: {url}")
