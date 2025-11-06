@@ -19,6 +19,14 @@ jobs:
       - name: Setup FFmpeg
         uses: FedericoCarboni/setup-ffmpeg@v3
 
+      # 2️⃣ Setup FFmpeg
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
+      # 2️⃣ Setup FFmpeg
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
       # 3️⃣ Install dependencies
       - name: Install Python dependencies
         run: |
