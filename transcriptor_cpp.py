@@ -67,8 +67,8 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
         seconds = 0
         timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        print(f"[+] Transcribing potongan {i}/{len(chunk_files)}: {chunk}")
-        print(f"    → Waktu mulai: {timestamp}")
+        print(f"[+] Transcribing potongan {i}/{len(chunk_files)}: {chunk}", flush=True)
+        print(f"    → Waktu mulai: {timestamp}", flush=True)
 
         cmd = [
             "./build/bin/whisper-cli",
