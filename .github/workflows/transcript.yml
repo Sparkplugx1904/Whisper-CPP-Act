@@ -37,7 +37,7 @@ jobs:
         run: |
           python3 transcriptor_cpp.py \
             "https://archive.org/download/vot-denpasar-20251101-183024/VOT-Denpasar_01-11-25-2.mp3" \
-            large-v3
+            medium
 
       # 5️⃣ Upload hasil transkrip sebagai artifact
       - name: Upload transcript artifact
