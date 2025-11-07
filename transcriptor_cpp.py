@@ -110,18 +110,29 @@ def combine_transcripts(all_text, output_file="./transcripts/final_transcript.tx
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python3 transcriptor_cpp.py <url> <model>")
+        print("Usage: python3 transcriptor_cpp.py <url_or_file> <model>")
         print("Model: tiny | base | small | medium | large-v1 | large-v2 | large-v3 | large-v3-turbo")
         sys.exit(1)
 
-    url = sys.argv[1]
+    source = sys.argv[1]
     model_name = sys.argv[2]
     model_path = ensure_model_exists(model_name)
-    audio_path = Path("audio.mp3")
-    download_audio(url, audio_path)
-    chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")  # ← ubah di sini
-    all_text = transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)  # ← dan di sini
+
+    # 🔹 Jika input adalah file lokal
+    if os.path.exists(source):
+        audio_path = Path(source)
+        print(f"[✓] Menggunakan file lokal: {audio_path}")
+    else:
+        # 🔹 Jika input adalah URL
+        audio_path = Path("audio.mp3")
+        print(f"[!] Input berupa URL, mengunduh ke {audio_path}")
+        download_audio(source, audio_path)
+
+    # 🔹 Proses selanjutnya tetap sama
+    chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")
+    all_text = transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)
     combine_transcripts(all_text)
+
     final_output = "./transcripts/audio.mp3.txt"
     os.rename("./transcripts/final_transcript.txt", final_output)
     print(f"[✓] Final transcript: {final_output}")
