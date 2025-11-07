@@ -11,9 +11,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # 1️⃣ Clone repo tanpa dotfiles
+      - name: Clone Whisper-CPP dan keluarkan isinya ke ../
+        run: |
+          git clone https://github.com/Sparkplugx1904/Whisper-CPP.git temp_whisper
+          cd temp_whisper
+          shopt -s extglob
+          mv !(.?*) ../
+          cd ..
+          rm -rf temp_whisper
 
       # 2️⃣ Setup FFmpeg
       - name: Setup FFmpeg
