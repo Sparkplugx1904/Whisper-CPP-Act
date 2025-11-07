@@ -200,14 +200,14 @@ Whisper menyediakan berbagai ukuran model dengan trade-off antara kecepatan dan 
 
 | Model | Ukuran | Parameter | Memori | Kecepatan | Akurasi |
 |-------|--------|-----------|---------|-----------|---------|
-| `tiny` | ~75 MB | 39 M | ~1 GB | ⚡⚡⚡⚡⚡ | ⭐⭐ |
-| `base` | ~142 MB | 74 M | ~1 GB | ⚡⚡⚡⚡ | ⭐⭐⭐ |
-| `small` | ~466 MB | 244 M | ~2 GB | ⚡⚡⚡ | ⭐⭐⭐⭐ |
-| `medium` | ~1.5 GB | 769 M | ~5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ |
-| `large-v1` | ~2.9 GB | 1550 M | ~10 GB | ⚡ | ⭐⭐⭐⭐⭐ |
-| `large-v2` | ~2.9 GB | 1550 M | ~10 GB | ⚡ | ⭐⭐⭐⭐⭐ |
-| `large-v3` | ~2.9 GB | 1550 M | ~10 GB | ⚡ | ⭐⭐⭐⭐⭐ |
-| `large-v3-turbo` | ~1.6 GB | 809 M | ~6 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ |
+| `tiny` | ~75 MB | 39 M | ~1 GB | Sangat Cepat | Rendah |
+| `base` | ~142 MB | 74 M | ~1 GB | Cepat | Sedang |
+| `small` | ~466 MB | 244 M | ~2 GB | Sedang | Baik |
+| `medium` | ~1.5 GB | 769 M | ~5 GB | Lambat | Sangat Baik |
+| `large-v1` | ~2.9 GB | 1550 M | ~10 GB | Sangat Lambat | Excellent |
+| `large-v2` | ~2.9 GB | 1550 M | ~10 GB | Sangat Lambat | Excellent |
+| `large-v3` | ~2.9 GB | 1550 M | ~10 GB | Sangat Lambat | Excellent |
+| `large-v3-turbo` | ~1.6 GB | 809 M | ~6 GB | Lambat | Excellent |
 
 ### Rekomendasi Model
 
@@ -486,13 +486,18 @@ Model Whisper dari OpenAI tersedia dengan lisensi MIT.
 Untuk pertanyaan, bug reports, atau feedback:
 
 - **GitHub Issues**: [Create an issue](https://github.com/Sparkplugx1904/Whisper-CPP/issues)
-- **Email**: anandapradnyana68@gmail.com
 
 ---
 
 ## 📊 Statistik & Performance
 
 ### Benchmark (pada sistem standar)
+
+**Spesifikasi sistem test:**
+- CPU: Intel Core i5 / AMD Ryzen 5 (atau setara)
+- RAM: 16 GB
+- OS: Linux (Ubuntu 22.04)
+- Kondisi: CPU-only (tanpa GPU acceleration)
 
 | Model | Audio Duration | Processing Time | Real-time Factor |
 |-------|---------------|-----------------|------------------|
@@ -503,6 +508,7 @@ Untuk pertanyaan, bug reports, atau feedback:
 | large-v3 | 60 min | ~60 min | 1.0x |
 
 *Real-time factor: 0.1x berarti 10x lebih cepat dari durasi audio*
+*Catatan: Hasil dapat bervariasi tergantung spesifikasi hardware*
 
 ---
 
