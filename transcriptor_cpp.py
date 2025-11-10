@@ -31,34 +31,29 @@ def download_audio(url, output_path):
     print(f"[+] Mengunduh audio dari: {url}")
     download_file(url, output_path)
 
-
 def split_audio(input_path, output_dir, chunk_length_ms=10*60*1000):
     print(f"[+] Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
 
-    # 🔹 Load audio
     audio = AudioSegment.from_file(input_path)
-
     os.makedirs(output_dir, exist_ok=True)
     total = len(audio)
     chunks = []
+
     for i in range(0, total, chunk_length_ms):
         part = audio[i:i+chunk_length_ms]
         chunk_name = os.path.join(output_dir, f"part_{i//chunk_length_ms + 1}.mp3")
         part.export(chunk_name, format="mp3")
         chunks.append(chunk_name)
         print(f"    → {chunk_name}")
+
     print(f"[✓] Total {len(chunks)} potongan audio dibuat.")
-    return chunks, chunk_length_ms  # ⬅️ return juga nilai durasinya
-
-
+    return chunks, chunk_length_ms
 
 def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
     os.makedirs("transcripts", exist_ok=True)
     all_text = []
-    
-    # Ubah dari ms ke menit untuk perhitungan timestamp
     chunk_minutes = chunk_length_ms / 60000
-    
+
     for i, chunk in enumerate(chunk_files, start=1):
         start_min = (i - 1) * chunk_minutes
         hours = int(start_min // 60)
@@ -89,24 +84,12 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
             print(f"    [!] Gagal menemukan file transkrip untuk {chunk}")
     return all_text
 
-def combine_transcripts(all_text, output_file="./transcripts/final_transcript.txt"):
+def combine_transcripts(all_text, output_file):
     print("[+] Menggabungkan seluruh hasil transkripsi...")
-    
-    # Gabungkan semua teks jadi satu file
     with open(output_file, "w", encoding="utf-8") as f:
         for text in all_text:
             f.write(text.strip() + "\n\n")
     print(f"[✓] Transkrip akhir disimpan di: {output_file}")
-
-    # Hapus semua file .txt kecuali file final
-    folder = os.path.dirname(output_file)
-    for txt_file in glob.glob(os.path.join(folder, "*.txt")):
-        if os.path.abspath(txt_file) != os.path.abspath(output_file):
-            try:
-                os.remove(txt_file)
-                print(f"[-] Dihapus: {txt_file}")
-            except Exception as e:
-                print(f"[!] Gagal menghapus {txt_file}: {e}")
 
 def main():
     if len(sys.argv) < 3:
@@ -118,23 +101,24 @@ def main():
     model_name = sys.argv[2]
     model_path = ensure_model_exists(model_name)
 
-    # 🔹 Jika input adalah file lokal
+    # 🔹 Tentukan nama file audio
     if os.path.exists(source):
         audio_path = Path(source)
         print(f"[✓] Menggunakan file lokal: {audio_path}")
     else:
-        # 🔹 Jika input adalah URL
         audio_path = Path("audio.mp3")
         print(f"[!] Input berupa URL, mengunduh ke {audio_path}")
         download_audio(source, audio_path)
 
-    # 🔹 Proses selanjutnya tetap sama
+    # 🔹 Buat nama file output berdasarkan nama audio
+    output_name = audio_path.stem + ".txt"
+    final_output = Path("./transcripts") / output_name
+
+    # 🔹 Proses utama
     chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")
     all_text = transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)
-    combine_transcripts(all_text)
+    combine_transcripts(all_text, final_output)
 
-    final_output = "./transcripts/audio.mp3.txt"
-    os.rename("./transcripts/final_transcript.txt", final_output)
     print(f"[✓] Final transcript: {final_output}")
 
 if __name__ == "__main__":
