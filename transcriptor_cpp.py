@@ -31,7 +31,7 @@ def download_audio(url, output_path):
     print(f"[+] Mengunduh audio dari: {url}")
     download_file(url, output_path)
 
-def split_audio(input_path, output_dir, chunk_length_ms=10*60*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=30*1000):
     print(f"[+] Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
 
     audio = AudioSegment.from_file(input_path)
