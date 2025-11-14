@@ -111,7 +111,7 @@ def main():
         download_audio(source, audio_path)
 
     # 🔹 Buat nama file output berdasarkan nama audio
-    output_name = audio_path.stem + ".txt"
+    output_name = audio_path.stem + "_transcript.txt"
     final_output = Path("./transcripts") / output_name
 
     # 🔹 Proses utama
