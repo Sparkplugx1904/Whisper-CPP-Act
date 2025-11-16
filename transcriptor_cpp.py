@@ -49,47 +49,88 @@ def split_audio(input_path, output_dir, chunk_length_ms=5*60*1000):
     print(f"[✓] Total {len(chunks)} potongan audio dibuat.")
     return chunks, chunk_length_ms
 
+import os
+import re
+import subprocess
+from pathlib import Path
+from datetime import timedelta
+
+def shift_srt_time(file_path, offset_seconds):
+    pattern = r"(\d{2}):(\d{2}):(\d{2}),(\d{3})"
+
+    def shift(match):
+        h, m, s, ms = map(int, match.groups())
+        original = timedelta(hours=h, minutes=m, seconds=s, milliseconds=ms)
+        shifted = original + timedelta(seconds=offset_seconds)
+        total_ms = int(shifted.total_seconds() * 1000)
+        hh = total_ms // 3600000
+        mm = (total_ms % 3600000) // 60000
+        ss = (total_ms % 60000) // 1000
+        mss = total_ms % 1000
+        return f"{hh:02d}:{mm:02d}:{ss:02d},{mss:03d}"
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    new_content = re.sub(pattern, shift, content)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+
+
 def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms):
     os.makedirs("transcripts", exist_ok=True)
-    all_text = []
-    chunk_minutes = chunk_length_ms / 60000
+
+    final_txt = Path("transcripts/transcript.txt")
+    final_srt = Path("transcripts/transcript.srt")
+
+    final_txt.write_text("", encoding="utf-8")
+    final_srt.write_text("", encoding="utf-8")
+
+    chunk_seconds = chunk_length_ms / 1000
 
     for i, chunk in enumerate(chunk_files, start=1):
-        start_min = (i - 1) * chunk_minutes
-        hours = int(start_min // 60)
-        minutes = int(start_min % 60)
-        seconds = 0
-        timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
-        print(f"[+] Transcribing potongan {i}/{len(chunk_files)}: {chunk}", flush=True)
-        print(f"    → Waktu mulai: {timestamp}", flush=True)
+        print(f"[+] Transcribing potongan {i}/{len(chunk_files)}: {chunk}")
 
         cmd = [
             "./build/bin/whisper-cli",
             "-m", str(model_path),
             "-f", chunk,
             "-otxt",
+            "-osrt",
             "-l", "id",
             "-pp"
         ]
         subprocess.run(cmd, check=True)
 
-        txt_file = Path(chunk).with_suffix(".mp3.txt")
+        txt_file = Path(chunk).with_suffix(".txt")
         if txt_file.exists():
             with open(txt_file, "r", encoding="utf-8") as f:
-                all_text.append(f.read())
-            os.rename(txt_file, f"./transcripts/{txt_file.name}")
-            print(f"    [✓] Disimpan: ./transcripts/{txt_file.name}")
+                content = f.read().strip()
+            with open(final_txt, "a", encoding="utf-8") as out:
+                out.write(content + "\n\n")
+            txt_file.unlink()
+            print("    [✓] TXT appended ke transcript.txt")
         else:
-            print(f"    [!] Gagal menemukan file transkrip untuk {chunk}")
-    return all_text
+            print("    [!] TXT tidak ditemukan")
 
-def combine_transcripts(all_text, output_file):
-    print("[+] Menggabungkan seluruh hasil transkripsi...")
-    with open(output_file, "w", encoding="utf-8") as f:
-        for text in all_text:
-            f.write(text.strip() + "\n\n")
-    print(f"[✓] Transkrip akhir disimpan di: {output_file}")
+        srt_file = Path(chunk).with_suffix(".srt")
+        if srt_file.exists():
+            offset_seconds = (i - 1) * chunk_seconds
+            shift_srt_time(srt_file, offset_seconds)
+
+            with open(srt_file, "r", encoding="utf-8") as f:
+                srt_block = f.read().strip()
+
+            with open(final_srt, "a", encoding="utf-8") as out:
+                out.write(srt_block + "\n\n")
+
+            srt_file.unlink()
+            print("    [✓] SRT appended ke transcript.srt")
+        else:
+            print("    [!] SRT tidak ditemukan")
+
+    print("[✓] Semua TXT dan SRT telah digabung otomatis.")
+    print(f"[✓] Output: {final_txt}")
+    print(f"[✓] Output: {final_srt}")
 
 def main():
     if len(sys.argv) < 3:
@@ -110,16 +151,8 @@ def main():
         print(f"[!] Input berupa URL, mengunduh ke {audio_path}")
         download_audio(source, audio_path)
 
-    # 🔹 Buat nama file output berdasarkan nama audio
-    output_name = audio_path.stem + "_transcript.txt"
-    final_output = Path("./transcripts") / output_name
-
     # 🔹 Proses utama
     chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")
-    all_text = transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)
-    combine_transcripts(all_text, final_output)
+    transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms)
 
-    print(f"[✓] Final transcript: {final_output}")
-
-if __name__ == "__main__":
-    main()
+    print("[✓] Final output ada di folder ./transcripts/")
