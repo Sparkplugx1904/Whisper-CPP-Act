@@ -195,10 +195,16 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
     for i, chunk in enumerate(chunk_files, start=1):
         log_info(f"Mentranskripsi potongan {i}/{len(chunk_files)}: {chunk}")
         
+        # --- PERUBAHAN DI SINI ---
+        # Tentukan path output secara eksplisit, tanpa ekstensi
+        # Cth: "chunks/part_1.mp3" -> "chunks/part_1"
+        output_base_path = Path(chunk).with_suffix("")
+        
         cmd = [
             str(whisper_cli_path),
             "-m", str(model_path),
             "-f", chunk,
+            "-of", str(output_base_path), # <-- TAMBAHKAN FLAG INI
             "-otxt",
             "-osrt",
             "-l", "id",
@@ -212,11 +218,23 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
             stderr = e.stderr.decode().strip()
             log_error(f"whisper-cli gagal pada potongan {chunk}: {stderr}", exit_app=False)
             log_warn(f"Melompati potongan {chunk} karena error.")
+
+            # --- TAMBAHAN DEBUG ---
+            # Jika gagal, coba hapus file output parsial agar tidak bingung
+            try:
+                txt_file_fail = output_base_path.with_suffix(".txt")
+                srt_file_fail = output_base_path.with_suffix(".srt")
+                if txt_file_fail.exists(): txt_file_fail.unlink()
+                if srt_file_fail.exists(): srt_file_fail.unlink()
+            except Exception as e_clean:
+                log_warn(f"  → Gagal membersihkan file sisa: {e_clean}")
+
             continue # Lanjutkan ke potongan berikutnya
         except Exception as e:
             log_error(f"Error tak terduga saat menjalankan whisper-cli pada {chunk}: {e}", exit_app=True)
 
         # --- Proses TXT ---
+        # Logika ini sekarang seharusnya sudah benar karena kita pakai -of
         txt_file = Path(chunk).with_suffix(".txt")
         try:
             if txt_file.exists():
@@ -231,6 +249,7 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
             log_error(f"  → Gagal memproses file TXT {txt_file}: {e}")
 
         # --- Proses SRT ---
+        # Logika ini sekarang seharusnya sudah benar karena kita pakai -of
         srt_file = Path(chunk).with_suffix(".srt")
         try:
             if srt_file.exists():
