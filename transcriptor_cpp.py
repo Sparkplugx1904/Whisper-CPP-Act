@@ -63,17 +63,20 @@ def download_file(url, dest):
     log_info(f"Mengunduh: {url} → {dest}")
     try:
         # Menambahkan timeout 5 menit (300 detik)
+        # stdout=DEVNULL dan stderr=PIPE dihapus agar progress bar curl terlihat
         subprocess.run(
             ["curl", "-L", "-o", str(dest), "-m", "300", url], 
-            check=True, 
-            stdout=subprocess.DEVNULL, 
-            stderr=subprocess.PIPE
+            check=True
         )
+        # Pesan sukses dipindahkan ke baris baru agar tidak bentrok dengan output curl
+        print() # Tambahkan baris baru setelah progress bar curl
         log_success(f"Unduhan selesai: {dest}")
         return True
     except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode().strip()
-        log_error(f"Gagal mengunduh file (curl error): {stderr}", exit_app=False)
+        # Karena stderr tidak lagi di-pipe, e.stderr akan None.
+        # Pesan error curl sudah otomatis tercetak ke console.
+        print() # Tambahkan baris baru jika curl error
+        log_error(f"Gagal mengunduh file (curl return code: {e.returncode}). Lihat pesan error di atas.", exit_app=False)
         if dest.exists():
             dest.unlink() # Hapus file yang mungkin rusak/sebagian
         return False
@@ -212,11 +215,16 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
         ]
         
         try:
-            # Menggunakan stderr=subprocess.PIPE untuk menangkap output error
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            # --- PERUBAHAN DI SINI ---
+            # Hapus stdout=DEVNULL dan stderr=PIPE agar output/progress whisper-cli terlihat
+            subprocess.run(cmd, check=True)
+            print() # Tambahkan baris baru setelah output whisper-cli selesai
         except subprocess.CalledProcessError as e:
-            stderr = e.stderr.decode().strip()
-            log_error(f"whisper-cli gagal pada potongan {chunk}: {stderr}", exit_app=False)
+            # stderr = e.stderr.decode().strip() # Baris ini tidak lagi valid, tapi tidak apa-apa
+            
+            # Pesan error dari whisper-cli sudah otomatis tercetak ke konsol
+            print() # Tambahkan baris baru untuk spasi
+            log_error(f"whisper-cli gagal pada potongan {chunk} (return code: {e.returncode}). Lihat pesan error di atas.", exit_app=False)
             log_warn(f"Melompati potongan {chunk} karena error.")
 
             # --- TAMBAHAN DEBUG ---
