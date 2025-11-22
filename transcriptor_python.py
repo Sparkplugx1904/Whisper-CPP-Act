@@ -13,7 +13,8 @@ from pydub.utils import which
 # --- Dependensi Python Baru ---
 try:
     import torch
-    from transformers import pipeline
+    # Impor tambahan untuk memuat komponen secara manual
+    from transformers import pipeline, AutoModelForSpeechSeq2Seq, AutoTokenizer, GenerationConfig
 except ImportError:
     print("[✗] ERROR: Dependensi Python tidak ditemukan.", file=sys.stderr)
     print("Harap instal dependensi yang diperlukan dari requirements.txt", file=sys.stderr)
@@ -53,19 +54,18 @@ def download_file(url, dest):
     """Mengunduh file menggunakan curl dengan penanganan error yang kuat."""
     log_info(f"Mengunduh: {url} → {dest}")
     try:
-        # Menambahkan timeout 5 menit (300 detik)
         subprocess.run(
             ["curl", "-L", "-o", str(dest), "-m", "300", url],
             check=True
         )
-        print() # Tambahkan baris baru setelah progress bar curl
+        print() 
         log_success(f"Unduhan selesai: {dest}")
         return True
     except subprocess.CalledProcessError as e:
-        print() # Tambahkan baris baru jika curl error
+        print() 
         log_error(f"Gagal mengunduh file (curl return code: {e.returncode}). Lihat pesan error di atas.", exit_app=False)
         if dest.exists():
-            dest.unlink() # Hapus file yang mungkin rusak/sebagian
+            dest.unlink()
         return False
     except Exception as e:
         log_error(f"Terjadi error tak terduga saat mengunduh: {e}", exit_app=False)
@@ -85,7 +85,7 @@ def split_audio(input_path, output_dir, chunk_length_ms=5*60*1000):
         audio = AudioSegment.from_file(input_path)
     except FileNotFoundError:
         log_error(f"File audio tidak ditemukan di: {input_path}", exit_app=True)
-    except Exception as e: # Menangkap error pydub/ffmpeg
+    except Exception as e:
         log_error(f"Gagal memuat file audio: {e}. Pastikan file tidak rusak dan format didukung.", exit_app=True)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -115,29 +115,43 @@ def initialize_transcriber():
     log_info(f"Memuat model '{model_id}'...")
     log_warn("Ini mungkin memakan waktu lama saat pertama kali (model ~1.5GB).")
     try:
-        # Periksa apakah CUDA (GPU) tersedia
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         log_info(f"Menggunakan perangkat: {device}")
         
+        # --- PERUBAHAN DI SINI ---
+        # 1. Muat komponen secara manual
+        log_info("Memuat model dan tokenizer...")
+        model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id).to(device)
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        
+        # 2. Buat GenerationConfig dan atur bahasa/tugas
+        # Ini adalah langkah kunci untuk memperbaiki error timestamp
+        log_info("Mengonfigurasi GenerationConfig untuk 'id' dan 'transcribe'...")
+        generation_config = GenerationConfig.from_pretrained(model_id)
+        generation_config.language = "id"
+        generation_config.task = "transcribe"
+        
+        # 3. Terapkan forced_decoder_ids (sama seperti sebelumnya, tapi ke config)
+        log_info("Menerapkan forced_decoder_ids...")
+        forced_decoder_ids = tokenizer.get_decoder_prompt_ids(language="id", task="transcribe")
+        generation_config.forced_decoder_ids = forced_decoder_ids
+        
+        # 4. Buat pipeline dengan SEMUA komponen yang sudah disiapkan
+        log_info("Menginisialisasi pipeline...")
         transcriber = pipeline(
             "automatic-speech-recognition",
-            model=model_id,
+            model=model,
+            tokenizer=tokenizer,
+            generation_config=generation_config, # <-- INI FIXNYA
             device=device
         )
-        
-        # Terapkan konfigurasi spesifik dari user
-        log_info("Menerapkan forced_decoder_ids untuk bahasa 'id'...")
-        transcriber.model.config.forced_decoder_ids = (
-            transcriber.tokenizer.get_decoder_prompt_ids(
-                language="id",
-                task="transcribe"
-            )
-        )
+        # --- AKHIR PERUBAHAN ---
         
         log_success("Model transkripsi berhasil dimuat.")
         return transcriber
     except Exception as e:
         log_error(f"Gagal memuat model dari Hugging Face: {e}", exit_app=True)
+        traceback.print_exc() # Tampilkan trace lengkap jika gagal
         return None
 
 def format_srt_time(seconds):
@@ -173,13 +187,11 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
         time_offset_seconds = (i - 1) * chunk_seconds_base
         
         try:
-            # Panggil pipeline
-            # return_timestamps=True akan mengembalikan 'chunks'
             result = transcriber(
                 chunk_path_str, 
                 return_timestamps=True,
-                chunk_length_s=30,  # Parameter standar untuk chunking internal whisper
-                stride_length_s=5   # Parameter standar
+                chunk_length_s=30,
+                stride_length_s=5
             )
             
             # 1. Proses TXT
@@ -195,7 +207,7 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
             chunks = result.get('chunks', [])
             if not chunks:
                 log_warn("  → Tidak ada timestamp (chunks) yang dikembalikan untuk SRT.")
-                continue # Lanjut ke file berikutnya
+                continue 
                 
             srt_content = ""
             for segment in chunks:
@@ -207,11 +219,9 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
 
                 start_time, end_time = timestamp
                 
-                # Terapkan offset *sebelum* memformat
                 start_time += time_offset_seconds
                 end_time += time_offset_seconds
                 
-                # Format ke SRT
                 srt_content += f"{srt_block_counter}\n"
                 srt_content += f"{format_srt_time(start_time)} --> {format_srt_time(end_time)}\n"
                 srt_content += f"{segment_text}\n\n"
@@ -220,7 +230,7 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
             
             if srt_content:
                 with open(final_srt, "a", encoding="utf-8") as out:
-                    out.write(srt_content) # \n\n sudah ada di dalam loop
+                    out.write(srt_content)
                 log_success(f"  → SRT digabung & di-re-index (offset {time_offset_seconds:.2f}s).")
 
         except Exception as e:
@@ -231,7 +241,6 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
             log_warn(f"Melompati potongan {chunk_path.name} karena error.")
             continue
         finally:
-            # Hapus file chunk audio setelah diproses
             try:
                 chunk_path.unlink()
                 log_info(f"  → File chunk {chunk_path.name} dihapus.")
@@ -243,36 +252,32 @@ def transcribe_with_transformers(transcriber, chunk_files, chunk_length_ms):
     log_success(f"Output SRT: {final_srt}")
 
 def main():
+    # Perbarui pesan Usage: argumen model tidak lagi diperlukan
     if len(sys.argv) < 2:
         print(f"Usage: python3 {sys.argv[0]} <url_or_file>")
         print("Script ini menggunakan model 'cahya/whisper-medium-id' (Hugging Face) secara otomatis.")
+        print(f"Contoh: python3 {sys.argv[0]} \"http://example.com/audio.mp3\"")
+        print(f"Contoh: python3 {sys.argv[0]} file_lokal_saya.wav")
         sys.exit(1)
     
     chunk_dir = None
     audio_path = None
-    source = sys.argv[1]
+    source = sys.argv[1] # Hanya ambil argumen pertama
     is_local_file = os.path.exists(source)
 
     try:
-        # 1. Cek dependensi (hanya ffmpeg)
         check_ffmpeg_dependency()
-
-        # 2. Inisialisasi model
         transcriber = initialize_transcriber()
 
-        # 3. Tentukan & unduh audio (jika perlu)
         if is_local_file:
             audio_path = Path(source)
             log_success(f"Menggunakan file lokal: {audio_path}")
         else:
-            # Beri nama file audio yang diunduh berdasarkan URL (sedikit)
             safe_name = re.sub(r'[^a-zA-Z0-9]', '_', source.split('/')[-1])
             audio_path = Path(f"audio_{safe_name}.mp3")
             log_warn(f"Input berupa URL, mengunduh ke {audio_path}...")
             download_audio(source, audio_path)
 
-        # 4. Proses utama
-        # Buat folder chunk yang unik berdasarkan nama file audio
         chunk_dir = Path(f"./chunks_{audio_path.stem}")
         chunk_files, chunk_length_ms = split_audio(audio_path, chunk_dir)
         
@@ -285,14 +290,12 @@ def main():
         log_info("Output akhir ada di folder ./transcripts/")
 
     except Exception as e:
-        # Penangan error global untuk masalah yang tidak terduga
         log_error(f"Terjadi error fatal yang tidak terduga: {e}", exit_app=False)
         print("------ STACK TRACE LENGKAP ------")
         traceback.print_exc()
         print("---------------------------------")
         sys.exit(1)
     finally:
-        # 5. Pembersihan
         if chunk_dir and chunk_dir.exists():
             try:
                 shutil.rmtree(chunk_dir)
@@ -300,7 +303,6 @@ def main():
             except Exception as e:
                 log_warn(f"Gagal menghapus folder chunk '{chunk_dir}': {e}")
         
-        # Hapus file audio yang diunduh (jika bukan file lokal)
         if not is_local_file and audio_path and audio_path.exists():
              try:
                 audio_path.unlink()
