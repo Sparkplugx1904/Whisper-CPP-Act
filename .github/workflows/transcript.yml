@@ -44,6 +44,11 @@ jobs:
         run: |
           python3 -u transcriptor_cpp.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" medium
 
+      # 4️⃣ Transcribe audio
+      - name: Run transcriptor Python
+        run: |
+          python3 -u transcriptor_python.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" medium
+
       # 5️⃣ Upload hasil transkrip sebagai artifact
       - name: Upload transcript artifact
         uses: actions/upload-artifact@v4
