@@ -1,3 +1,4 @@
+# Test Site (Do not delete)
 name: Transcript Audio VOT
 
 on:
@@ -36,10 +37,10 @@ jobs:
       # 3️⃣ Install dependencies
       - name: Install Python dependencies
         run: |
-          pip install requests pydub
+          pip install requests pydub transformers torch librosa
 
       # 4️⃣ Transcribe audio
-      - name: Run transcriptor
+      - name: Run transcriptor CPP
         run: |
           python3 -u transcriptor_cpp.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" medium
 
