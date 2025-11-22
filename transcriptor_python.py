@@ -118,31 +118,32 @@ def initialize_transcriber():
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         log_info(f"Menggunakan perangkat: {device}")
         
-        # --- PERUBAHAN DI SINI ---
         # 1. Muat komponen secara manual
         log_info("Memuat model dan tokenizer...")
         model = AutoModelForSpeechSeq2Seq.from_pretrained(model_id).to(device)
         tokenizer = AutoTokenizer.from_pretrained(model_id)
         
-        # 2. Buat GenerationConfig dan atur bahasa/tugas
-        # Ini adalah langkah kunci untuk memperbaiki error timestamp
+        # --- PERUBAHAN DI SINI UNTUK MEMPERBAIKI GenerationConfig YANG HILANG ---
+        # 2. Gunakan GenerationConfig yang sudah ada di dalam objek model
         log_info("Mengonfigurasi GenerationConfig untuk 'id' dan 'transcribe'...")
-        generation_config = GenerationConfig.from_pretrained(model_id)
+        # Ganti GenerationConfig.from_pretrained(model_id)
+        generation_config = model.generation_config 
+        
         generation_config.language = "id"
         generation_config.task = "transcribe"
         
-        # 3. Terapkan forced_decoder_ids (sama seperti sebelumnya, tapi ke config)
+        # 3. Terapkan forced_decoder_ids
         log_info("Menerapkan forced_decoder_ids...")
         forced_decoder_ids = tokenizer.get_decoder_prompt_ids(language="id", task="transcribe")
         generation_config.forced_decoder_ids = forced_decoder_ids
         
-        # 4. Buat pipeline dengan SEMUA komponen yang sudah disiapkan
+        # 4. Buat pipeline
         log_info("Menginisialisasi pipeline...")
         transcriber = pipeline(
             "automatic-speech-recognition",
             model=model,
             tokenizer=tokenizer,
-            generation_config=generation_config, # <-- INI FIXNYA
+            generation_config=generation_config, 
             device=device
         )
         # --- AKHIR PERUBAHAN ---
@@ -150,8 +151,9 @@ def initialize_transcriber():
         log_success("Model transkripsi berhasil dimuat.")
         return transcriber
     except Exception as e:
+        # Perhatikan: trace_back akan mencatat error "file not found" jika GenerationConfig.from_pretrained digunakan.
         log_error(f"Gagal memuat model dari Hugging Face: {e}", exit_app=True)
-        traceback.print_exc() # Tampilkan trace lengkap jika gagal
+        traceback.print_exc() 
         return None
 
 def format_srt_time(seconds):
