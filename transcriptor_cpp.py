@@ -115,7 +115,7 @@ def download_audio(url, output_path):
 import subprocess
 import glob
 
-def split_audio(input_path, output_dir, chunk_length_ms=20*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=60*1000):
     """
     Memecah audio menggunakan ffmpeg secara langsung untuk efisiensi maksimum.
     Ini menghindari pemuatan seluruh file ke memori dan re-encoding yang tidak perlu.
@@ -192,46 +192,71 @@ def split_audio(input_path, output_dir, chunk_length_ms=20*1000):
     
     log_success(f"Total {len(chunks)} potongan audio berhasil dibuat (via ffmpeg).")
     return chunks, chunk_length_ms
-    
-# FUNGSI BARU YANG DIPERBAIKI
+
+# (Asumsikan log_warn dan log_error sudah ada)
+
 def shift_srt_time(file_path, offset_seconds, max_chunk_seconds):
     """
     Menggeser waktu file SRT dengan aman DAN membersihkan/memangkas 
-    timestamp yang melebihi durasi potongan maksimum.
+    stempel waktu yang melebihi durasi potongan maksimum.
     """
-    pattern = r"(\d{2}):(\d{2}):(\d{2}),(\d{3})"
     
-    # Konversi durasi ke obyek timedelta untuk perbandingan
+    # POLA BARU: Menangkap seluruh baris waktu (start --> end)
+    pattern = r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})"
+    
     offset_duration = timedelta(seconds=offset_seconds)
     max_duration = timedelta(seconds=max_chunk_seconds)
 
-    def shift_and_clean(match):
-        h, m, s, ms = map(int, match.groups())
-        original = timedelta(hours=h, minutes=m, seconds=s, milliseconds=ms)
-        
-        # --- INI ADALAH PERBAIKAN BUG ---
-        # Jika timestamp (baik mulai atau akhir) melebihi durasi
-        # potongan yang diizinkan, pangkas ke durasi maksimum.
-        if original > max_duration:
-            log_warn(f"  → Memangkas timestamp {original} ke {max_duration} di {file_path}")
-            original = max_duration
-        
-        # Lakukan pergeseran (offset)
-        shifted = original + offset_duration
-        
-        # Konversi total detik kembali ke format H:M:S,ms
-        total_ms = int(shifted.total_seconds() * 1000)
+    # --- Helper internal untuk konversi ---
+    def to_timedelta(time_str):
+        h, m, s, ms = map(int, re.match(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})", time_str).groups())
+        return timedelta(hours=h, minutes=m, seconds=s, milliseconds=ms)
+
+    def to_str(td):
+        total_ms = int(td.total_seconds() * 1000)
         hh = total_ms // 3600000
         mm = (total_ms % 3600000) // 60000
         ss = (total_ms % 60000) // 1000
         mss = total_ms % 1000
         return f"{hh:02d}:{mm:02d}:{ss:02d},{mss:03d}"
+    # --- Selesai helper ---
+
+    def shift_and_clean_line(match):
+        start_str, end_str = match.groups()
+        
+        original_start = to_timedelta(start_str)
+        original_end = to_timedelta(end_str)
+
+        # --- LOGIKA PEMANGKASAN BARU YANG BENAR ---
+        
+        # 1. Jika subtitle dimulai SETELAH durasi maks, pangkas keduanya
+        if original_start >= max_duration:
+            log_warn(f"  → Subtitle dimulai setelah maks durasi. Memangkas: {start_str}")
+            original_start = max_duration
+            original_end = max_duration # Jadikan durasi 0
+
+        # 2. Jika subtitle berakhir SETELAH durasi maks (tapi dimulai sebelumnya)
+        #    Pangkas HANYA waktu akhir.
+        elif original_end > max_duration:
+            log_warn(f"  → Memangkas waktu akhir {end_str} ke {max_duration}")
+            original_end = max_duration
+
+        # 3. Lakukan pergeseran (offset) SETELAH pemangkasan
+        shifted_start = original_start + offset_duration
+        shifted_end = original_end + offset_duration
+
+        # 4. Pastikan waktu akhir tidak pernah lebih kecil dari waktu mulai
+        if shifted_end < shifted_start:
+             shifted_end = shifted_start
+
+        return f"{to_str(shifted_start)} --> {to_str(shifted_end)}"
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
         
-        new_content = re.sub(pattern, shift_and_clean, content)
+        # Gunakan fungsi dan pola yang baru
+        new_content = re.sub(pattern, shift_and_clean_line, content)
         
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_content)
@@ -243,24 +268,6 @@ def shift_srt_time(file_path, offset_seconds, max_chunk_seconds):
     except Exception as e:
         log_error(f"  → Gagal memproses pergeseran waktu SRT untuk {file_path}: {e}", exit_app=False)
         return False
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        
-        new_content = re.sub(pattern, shift, content)
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        
-        return True
-    except FileNotFoundError:
-        log_error(f"  → Gagal menemukan file SRT untuk digeser: {file_path}", exit_app=False)
-        return False
-    except Exception as e:
-        log_error(f"  → Gagal memproses pergeseran waktu SRT untuk {file_path}: {e}", exit_app=False)
-        return False
-
 
 def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whisper_cli_path):
     """Mentranskripsi setiap potongan, menangani kegagalan per potongan."""
