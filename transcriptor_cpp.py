@@ -112,7 +112,7 @@ def download_audio(url, output_path):
         log_error("Gagal mengunduh audio. Membatalkan.", exit_app=True)
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
-def split_audio(input_path, output_dir, chunk_length_ms=15*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=10*1000):
     """Memecah audio dengan penanganan error untuk pydub."""
     log_info(f"Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
     try:
