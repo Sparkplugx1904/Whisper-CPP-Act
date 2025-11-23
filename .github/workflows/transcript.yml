@@ -43,8 +43,9 @@ jobs:
       # 4️⃣ Transcribe audio
       - name: Run transcriptor CPP
         run: |
-          # python3 -u transcriptor_cpp.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" medium
-          python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" medium
+          # python3 -u transcriptor_cpp.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" -m medium
+          # python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" -m medium
+          python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" -cm "https://huggingface.co/duckywise/whisper-medium-id-ggml/blob/main/ggml-medium-id.bin"
 
       # 5️⃣ Upload hasil transkrip sebagai artifact
       - name: Upload transcript artifact

@@ -84,27 +84,41 @@ def download_file(url, dest):
         log_error(f"Terjadi error tak terduga saat mengunduh: {e}", exit_app=False)
         return False
 
-def ensure_model_exists(model_name):
-    """Memastikan model ada, memvalidasi nama, dan mengunduh jika perlu."""
-    if model_name not in VALID_MODELS:
-        log_error(f"Nama model tidak valid: '{model_name}'. Pilihan: {', '.join(VALID_MODELS)}", exit_app=True)
-
+def ensure_custom_model_exists(url):
+    """Memastikan model kustom ada, mengunduh dari URL jika perlu."""
+    
+    # Ekstrak nama file dari URL
+    try:
+        # Cara sederhana untuk mendapatkan nama file terakhir
+        filename = url.split('/')[-1]
+        # Membersihkan jika ada parameter (meskipun contoh tidak punya)
+        filename = filename.split('?')[0]
+        
+        if not filename:
+            log_error(f"URL model kustom tidak valid (tidak bisa menemukan nama file): {url}", exit_app=True)
+            
+        # Opsi: Validasi dasar
+        if not filename.endswith(".bin"):
+             log_warn(f"Nama file model kustom '{filename}' tidak diakhiri dengan .bin. Tetap melanjutkan...")
+             
+    except Exception as e:
+        log_error(f"URL model kustom tidak valid: {url}. Error: {e}", exit_app=True)
+        
     os.makedirs("models", exist_ok=True)
-    model_path = Path(f"./models/ggml-{model_name}.bin")
+    model_path = Path(f"./models/{filename}")
     
     if model_path.exists():
-        log_success(f"Model ditemukan: {model_path}")
+        log_success(f"Model kustom ditemukan: {model_path}")
         return model_path
     
-    log_warn(f"Model '{model_name}' belum ada, mengunduh dari HuggingFace...")
-    url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"
+    log_warn(f"Model kustom '{filename}' belum ada, mengunduh dari URL...")
     
     if not download_file(url, model_path):
-        log_error("Gagal mengunduh model. Membatalkan.", exit_app=True)
+        log_error("Gagal mengunduh model kustom. Membatalkan.", exit_app=True)
         
-    log_success(f"Model '{model_name}' berhasil diunduh.")
+    log_success(f"Model kustom '{filename}' berhasil diunduh.")
     return model_path
-
+    
 def download_audio(url, output_path):
     """Wrapper untuk mengunduh file audio."""
     log_info(f"Mengunduh audio dari: {url}")
@@ -394,21 +408,64 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
     log_success(f"Output SRT: {final_srt}")
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python3 transcriptor_debug.py <url_or_file> <model>")
-        print(f"Model: {', '.join(VALID_MODELS)}")
+    # Perbarui pesan Usage
+    if len(sys.argv) < 4: # Minimal: script.py <source> -m <model>
+        print("\nUsage: python3 transcriptor_debug.py <url_or_file> [-m <model_name> | -cm <model_url>]")
+        print(f"  Contoh Standar (-m): python3 script.py audio.mp3 -m medium")
+        print(f"  Model Standar Valid: {', '.join(VALID_MODELS)}")
+        print(f"  Contoh Kustom (-cm): python3 script.py audio.mp3 -cm https://.../ggml-medium-id.bin\n")
         sys.exit(1)
     
     try:
         # 1. Cek dependensi KETAT
         whisper_cli_path = check_dependencies()
 
-        # 2. Ambil argumen & validasi model
-        source = sys.argv[1]
-        model_name = sys.argv[2]
-        model_path = ensure_model_exists(model_name)
+        # 2. Parsing argumen baru
+        source = None
+        model_type = None
+        model_arg = None
+        
+        i = 1
+        while i < len(sys.argv):
+            arg = sys.argv[i]
+            if arg == "-m":
+                if i + 1 >= len(sys.argv) or sys.argv[i+1].startswith('-'):
+                    log_error("Argumen -m memerlukan nama model (cth: medium).", exit_app=True)
+                model_type = "standard"
+                model_arg = sys.argv[i+1]
+                i += 2 # Lewati flag dan nilainya
+            elif arg == "-cm":
+                if i + 1 >= len(sys.argv) or sys.argv[i+1].startswith('-'):
+                    log_error("Argumen -cm memerlukan URL.", exit_app=True)
+                model_type = "custom"
+                model_arg = sys.argv[i+1]
+                i += 2 # Lewati flag dan nilainya
+            elif source is None:
+                # Asumsikan argumen pertama non-flag adalah source
+                source = arg
+                i += 1
+            else:
+                log_warn(f"Mengabaikan argumen tidak dikenal: {arg}")
+                i += 1
+        
+        # Validasi argumen
+        if source is None:
+            log_error("File/URL sumber audio tidak ditemukan. Usage: python3 script.py <source> ...", exit_app=True)
+        if model_type is None or model_arg is None:
+            log_error("Argumen model tidak ditemukan. Gunakan -m <name> atau -cm <url>.", exit_app=True)
 
-        # 3. Tentukan & unduh audio (dengan validasi)
+        # 3. Dapatkan model_path berdasarkan tipe
+        model_path = None
+        if model_type == 'standard':
+            # Panggil fungsi lama untuk model standar
+            model_path = ensure_model_exists(model_arg) 
+        elif model_type == 'custom':
+            # Panggil fungsi baru untuk URL kustom
+            model_path = ensure_custom_model_exists(model_arg)
+        
+        # (Fungsi di atas akan exit jika model_path tidak valid)
+
+        # 4. Tentukan & unduh audio (logika lama tidak berubah)
         if os.path.exists(source):
             audio_path = Path(source)
             log_success(f"Menggunakan file lokal: {audio_path}")
@@ -417,12 +474,13 @@ def main():
             log_warn(f"Input berupa URL, mengunduh ke {audio_path}...")
             download_audio(source, audio_path)
 
-        # 4. Proses utama (dengan validasi)
+        # 5. Proses utama (logika lama tidak berubah)
         chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")
         
         if not chunk_files:
             log_error("Tidak ada potongan audio yang berhasil dibuat. Proses dihentikan.", exit_app=True)
 
+        # Panggil dengan model_path yang sudah ditentukan (bisa standar/kustom)
         transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whisper_cli_path)
 
         log_success("====== PROSES SELESAI ======")
@@ -435,6 +493,6 @@ def main():
         traceback.print_exc()
         print("---------------------------------")
         sys.exit(1)
-
+        
 if __name__ == "__main__":
     main()
