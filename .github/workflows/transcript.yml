@@ -56,4 +56,4 @@ jobs:
         with:
           name: vot-transcript
           path: transcripts/
-           retention-days: 1
+          retention-days: 1
