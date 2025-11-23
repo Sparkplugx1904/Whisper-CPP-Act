@@ -144,14 +144,31 @@ def split_audio(input_path, output_dir, chunk_length_ms=15*1000):
     return chunks, chunk_length_ms
 
 
-def shift_srt_time(file_path, offset_seconds):
-    """Menggeser waktu file SRT dengan aman."""
+# FUNGSI BARU YANG DIPERBAIKI
+def shift_srt_time(file_path, offset_seconds, max_chunk_seconds):
+    """
+    Menggeser waktu file SRT dengan aman DAN membersihkan/memangkas 
+    timestamp yang melebihi durasi potongan maksimum.
+    """
     pattern = r"(\d{2}):(\d{2}):(\d{2}),(\d{3})"
     
-    def shift(match):
+    # Konversi durasi ke obyek timedelta untuk perbandingan
+    offset_duration = timedelta(seconds=offset_seconds)
+    max_duration = timedelta(seconds=max_chunk_seconds)
+
+    def shift_and_clean(match):
         h, m, s, ms = map(int, match.groups())
         original = timedelta(hours=h, minutes=m, seconds=s, milliseconds=ms)
-        shifted = original + timedelta(seconds=offset_seconds)
+        
+        # --- INI ADALAH PERBAIKAN BUG ---
+        # Jika timestamp (baik mulai atau akhir) melebihi durasi
+        # potongan yang diizinkan, pangkas ke durasi maksimum.
+        if original > max_duration:
+            log_warn(f"  → Memangkas timestamp {original} ke {max_duration} di {file_path}")
+            original = max_duration
+        
+        # Lakukan pergeseran (offset)
+        shifted = original + offset_duration
         
         # Konversi total detik kembali ke format H:M:S,ms
         total_ms = int(shifted.total_seconds() * 1000)
@@ -160,6 +177,23 @@ def shift_srt_time(file_path, offset_seconds):
         ss = (total_ms % 60000) // 1000
         mss = total_ms % 1000
         return f"{hh:02d}:{mm:02d}:{ss:02d},{mss:03d}"
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        new_content = re.sub(pattern, shift_and_clean, content)
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+            
+        return True
+    except FileNotFoundError:
+        log_error(f"  → Gagal menemukan file SRT untuk digeser: {file_path}", exit_app=False)
+        return False
+    except Exception as e:
+        log_error(f"  → Gagal memproses pergeseran waktu SRT untuk {file_path}: {e}", exit_app=False)
+        return False
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -259,11 +293,20 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
         # --- Proses SRT ---
         # Logika ini sekarang seharusnya sudah benar karena kita pakai -of
         srt_file = Path(chunk).with_suffix(".srt")
+        # --- Proses SRT ---
         try:
             if srt_file.exists():
                 offset_seconds = (i - 1) * chunk_seconds
                 
-                if not shift_srt_time(srt_file, offset_seconds):
+                # --- INI ADALAH PERUBAHAN KEDUA ---
+                # Kita oper 'chunk_seconds' (yaitu 15.0) sebagai batas pangkas
+                
+                # (Pengecekan ini opsional tapi bagus)
+                # Jangan pangkas potongan terakhir, karena ia boleh berakhir kapan saja
+                is_last_chunk = (i == len(chunk_files))
+                max_seconds_cap = 99999.0 if is_last_chunk else chunk_seconds
+                
+                if not shift_srt_time(srt_file, offset_seconds, max_seconds_cap):
                     # Error sudah dicatat di dalam fungsi shift_srt_time
                     raise Exception(f"Gagal menggeser waktu untuk {srt_file}")
 
