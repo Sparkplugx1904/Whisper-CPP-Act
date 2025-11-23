@@ -10,6 +10,7 @@ on:
 jobs:
   transcribe:
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
       # 1️⃣ Clone repo tanpa dotfiles
@@ -55,3 +56,4 @@ jobs:
         with:
           name: vot-transcript
           path: transcripts/
+           retention-days: 1
