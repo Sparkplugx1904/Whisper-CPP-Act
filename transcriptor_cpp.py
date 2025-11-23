@@ -297,7 +297,7 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
             str(whisper_cli_path),
             "-m", str(model_path),
             "-f", chunk,
-            "--temperature 0.2",
+            "--temperature", "0.2",
             "-of", str(output_base_path), # <-- TAMBAHKAN FLAG INI
             "-otxt",
             "-osrt",
