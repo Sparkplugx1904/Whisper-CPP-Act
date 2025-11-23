@@ -115,7 +115,7 @@ def download_audio(url, output_path):
 import subprocess
 import glob
 
-def split_audio(input_path, output_dir, chunk_length_ms=60*1000):
+def split_audio(input_path, output_dir, chunk_length_ms=3*60*60*1000):
     """
     Memecah audio menggunakan ffmpeg secara langsung untuk efisiensi maksimum.
     Ini menghindari pemuatan seluruh file ke memori dan re-encoding yang tidak perlu.
