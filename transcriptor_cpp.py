@@ -112,38 +112,87 @@ def download_audio(url, output_path):
         log_error("Gagal mengunduh audio. Membatalkan.", exit_app=True)
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
+import subprocess
+import glob
+
 def split_audio(input_path, output_dir, chunk_length_ms=10*1000):
-    """Memecah audio dengan penanganan error untuk pydub."""
-    log_info(f"Memecah audio menjadi potongan {chunk_length_ms // 60000} menit...")
-    try:
-        audio = AudioSegment.from_file(input_path)
-    except FileNotFoundError:
-        log_error(f"File audio tidak ditemukan di: {input_path}", exit_app=True)
-    except Exception as e: # Menangkap error pydub/ffmpeg
-        log_error(f"Gagal memuat file audio: {e}. Pastikan file tidak rusak dan format didukung.", exit_app=True)
+    """
+    Memecah audio menggunakan ffmpeg secara langsung untuk efisiensi maksimum.
+    Ini menghindari pemuatan seluruh file ke memori dan re-encoding yang tidak perlu.
+    """
+    # Konversi ms ke detik untuk argumen ffmpeg
+    chunk_length_sec = chunk_length_ms / 1000
+    
+    # Perbaiki logika logging: 10000ms // 60000 adalah 0 menit. Tampilkan detik.
+    log_info(f"Memecah audio menjadi potongan {chunk_length_sec} detik menggunakan ffmpeg...")
 
     os.makedirs(output_dir, exist_ok=True)
-    total_ms = len(audio)
-    chunks = []
     
-    if total_ms == 0:
-         log_error("File audio kosong (durasi 0 detik). Membatalkan.", exit_app=True)
+    # Tentukan pola nama file output untuk ffmpeg.
+    # %d akan diganti dengan 1, 2, 3, ... (sesuai 'part_1.mp3', 'part_2.mp3')
+    output_pattern = Path(output_dir) / "part_%d.mp3"
+    
+    # Cek ekstensi file input (ubah ke huruf kecil)
+    input_ext = Path(input_path).suffix.lower()
 
-    for i in range(0, total_ms, chunk_length_ms):
-        chunk_name = Path(output_dir) / f"part_{i//chunk_length_ms + 1}.mp3"
-        try:
-            part = audio[i:i+chunk_length_ms]
-            part.export(str(chunk_name), format="mp3")
-            chunks.append(str(chunk_name))
-            log_info(f"  → Dibuat: {chunk_name}")
-        except Exception as e:
-            log_error(f"Gagal mengekspor potongan audio: {chunk_name}. Error: {e}", exit_app=False)
-            log_error("Menghentikan proses pemecahan audio.", exit_app=True)
+    # Siapkan perintah dasar ffmpeg
+    cmd = [
+        "ffmpeg",
+        "-i", str(input_path),      # File input
+        "-f", "segment",            # Gunakan segment muxer
+        "-segment_time", str(chunk_length_sec), # Durasi setiap potongan
+        "-segment_start_number", "1", # Mulai penomoran dari 1 (bukan 0)
+        "-reset_timestamps", "1",     # Reset timestamp di setiap file baru
+    ]
 
-    log_success(f"Total {len(chunks)} potongan audio berhasil dibuat.")
+    # --- INI ADALAH KUNCI EFISIENSI ---
+    if input_ext == ".mp3":
+        # Jika input adalah MP3, jangan encode ulang! Cukup salin stream-nya.
+        # Ini super cepat (hampir instan).
+        log_info("  → Input adalah MP3. Menggunakan mode stream copy (super cepat).")
+        cmd.extend(["-c", "copy"])
+    else:
+        # Jika input BUKAN MP3 (misalnya .wav, .m4a),
+        # kita harus meng-encode-nya ke MP3 (seperti yang dilakukan pydub).
+        # Ini masih jauh lebih cepat daripada pydub karena streaming.
+        log_info(f"  → Input adalah {input_ext}. Melakukan encode ke MP3 saat memecah.")
+        # Menggunakan VBR berkualitas tinggi (-q:a 2) sebagai ganti CBR
+        cmd.extend(["-c:a", "libmp3lame", "-q:a", "2"])
+
+    # Tambahkan pola output di akhir perintah
+    cmd.append(str(output_pattern))
+
+    log_info(f"  → Menjalankan: {' '.join(cmd)}")
+
+    try:
+        # Menjalankan perintah. Hapus stdout/stderr=DEVNULL agar output ffmpeg terlihat
+        # (Sama seperti perubahan yang kita lakukan pada whisper-cli)
+        subprocess.run(cmd, check=True)
+        print() # Baris baru setelah output ffmpeg
+    except subprocess.CalledProcessError as e:
+        print() # Baris baru jika error
+        log_error(f"ffmpeg gagal memecah audio. Return code: {e.returncode}. Lihat error di atas.", exit_app=True)
+    except FileNotFoundError:
+        log_error("ffmpeg tidak ditemukan. Pastikan ia terinstal dan ada di PATH sistem.", exit_app=True)
+
+    # Setelah selesai, kumpulkan nama file yang telah dibuat
+    # Gunakan glob untuk mencocokkan pola 'part_*.mp3'
+    # 'key' ini penting untuk menyortir part_1.mp3, part_2.mp3, ... part_10.mp3 dengan benar
+    chunk_files_sorted = sorted(
+        glob.glob(str(Path(output_dir) / "part_*.mp3")),
+        key=lambda x: int(Path(x).stem.split('_')[1])
+    )
+
+    if not chunk_files_sorted:
+         log_warn("ffmpeg berjalan tetapi tidak ada file potongan yang ditemukan. Mungkin file audio terlalu pendek?")
+         # Tetap kembalikan list kosong agar skrip bisa menangani
+         return [], chunk_length_ms
+         
+    chunks = [str(f) for f in chunk_files_sorted]
+    
+    log_success(f"Total {len(chunks)} potongan audio berhasil dibuat (via ffmpeg).")
     return chunks, chunk_length_ms
-
-
+    
 # FUNGSI BARU YANG DIPERBAIKI
 def shift_srt_time(file_path, offset_seconds, max_chunk_seconds):
     """
