@@ -15,6 +15,7 @@ jobs:
     steps:
       # 1️⃣ Clone repo tanpa dotfiles
       - name: Clone Whisper-CPP dan keluarkan isinya ke ../
+        continue-on-error: true
         run: |
           git clone https://github.com/Sparkplugx1904/Whisper-CPP.git temp_whisper
           cd temp_whisper
@@ -25,14 +26,17 @@ jobs:
 
       # 2️⃣ Setup FFmpeg
       - name: Setup FFmpeg
+        continue-on-error: true
         uses: FedericoCarboni/setup-ffmpeg@v3
 
       # 2️⃣ Setup FFmpeg
       - name: Setup FFmpeg
+        continue-on-error: true
         uses: FedericoCarboni/setup-ffmpeg@v3
-
+        
       # 2️⃣ Setup FFmpeg
       - name: Setup FFmpeg
+        continue-on-error: true
         uses: FedericoCarboni/setup-ffmpeg@v3
 
       # 3️⃣ Install dependencies
