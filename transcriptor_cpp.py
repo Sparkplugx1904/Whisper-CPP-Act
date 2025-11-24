@@ -294,7 +294,7 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
             str(whisper_cli_path),
             "-m", str(model_path), # <--- Menggunakan model_path yang ditentukan
             "-f", chunk,
-            "--temperature", "0.8",
+            "--temperature", "1.0",
             "-of", str(output_base_path),
             "-otxt",
             "-osrt",
