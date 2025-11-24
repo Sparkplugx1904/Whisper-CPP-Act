@@ -44,8 +44,7 @@ jobs:
       - name: Run transcriptor CPP
         run: |
           # python3 -u transcriptor_cpp.py "https://github.com/Sparkplugx1904/voiceoftrisma/raw/refs/heads/main/assets/sample_vot.mp3" -m medium
-          # python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" -m medium
-          python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" -cm "https://storage.googleapis.com/kaggle-script-versions/281331918/output/whisper-medium-id/ggml-model-q8_0.bin?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20251124%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251124T043914Z&X-Goog-Expires=3600&X-Goog-SignedHeaders=host&X-Goog-Signature=17c1a9d7464f17d60e4a1c1a20b3bb2e3df12a09f69fb5f655ec0f8dded167dccf0aef48ac8ef1703d03a68ffbaf6eb52cd465fc7376a60faaa744ffe31b16998e8de9ad6f6374c5fff530b6f9510b8601b83129a2d9ce671e58db1ce26934539286920b7aecf9c7435438214afef73688e34a6fd4b81c4f1f55ec0b5c63ea298ef0ac7d6ae7add9d09cf6c8ac3a16ac4b6b8ee3a8ef3f7558da4c006a1c316de355e54aef66da540e339434b6e2ad0a3239912659c0b3c3ff24a4af1fd313b3f70789da6159627bdcab7f879f5d0fe246ed5c76c993bcfa3bfdf0c0466dad1c8434176accbba239a1349150b240e23f022dc2232c52a73c0f28611180dc1ac0"
+          python3 -u transcriptor_cpp.py "https://archive.org/download/vot-denpasar-20251122-183000/VOT-Denpasar_22-11-25-0.mp3" -m medium
 
       # 5️⃣ Upload hasil transkrip sebagai artifact
       - name: Upload transcript artifact
