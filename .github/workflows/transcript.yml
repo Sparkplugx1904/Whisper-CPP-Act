@@ -24,20 +24,20 @@ jobs:
           cd ..
           rm -rf temp_whisper
 
-      # 2️⃣ Setup FFmpeg
-      - name: Setup FFmpeg
-        continue-on-error: true
-        uses: FedericoCarboni/setup-ffmpeg@v3
+      # # 2️⃣ Setup FFmpeg
+      # - name: Setup FFmpeg
+      #   continue-on-error: true
+      #   uses: FedericoCarboni/setup-ffmpeg@v3
 
-      # 2️⃣ Setup FFmpeg
-      - name: Setup FFmpeg
-        continue-on-error: true
-        uses: FedericoCarboni/setup-ffmpeg@v3
+      # # 2️⃣ Setup FFmpeg
+      # - name: Setup FFmpeg
+      #   continue-on-error: true
+      #   uses: FedericoCarboni/setup-ffmpeg@v3
         
-      # 2️⃣ Setup FFmpeg
-      - name: Setup FFmpeg
-        continue-on-error: true
-        uses: FedericoCarboni/setup-ffmpeg@v3
+      # # 2️⃣ Setup FFmpeg
+      # - name: Setup FFmpeg
+      #   continue-on-error: true
+      #   uses: FedericoCarboni/setup-ffmpeg@v3
 
       # 3️⃣ Install dependencies
       - name: Install Python dependencies
