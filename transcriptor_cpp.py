@@ -4,7 +4,6 @@ import os
 import subprocess
 import re
 import traceback
-import argparse # Import modul argparse
 import glob
 from pathlib import Path
 from datetime import timedelta
@@ -34,7 +33,7 @@ def log_error(msg, exit_app=False):
 # --- Daftar Model yang Valid ---
 VALID_MODELS = ["tiny", "base", "small", "medium", "large-v1", "large-v2", "large-v3", "large-v3-turbo"]
 
-# --- Fungsi Inti dengan Penanganan Error (Fungsi-fungsi ini TIDAK diubah, hanya ditambahkan) ---
+# --- Fungsi Inti dengan Penanganan Error (Fungsi-fungsi ini TIDAK diubah) ---
 
 def check_dependencies():
     """Memeriksa semua dependensi eksternal sebelum memulai."""
@@ -83,6 +82,7 @@ def download_file(url, dest):
 
 def ensure_model_exists(model_name):
     """Memastikan model ada, memvalidasi nama, dan mengunduh jika perlu."""
+    # VALIDASI MODEL (TIDAK BERUBAH)
     if model_name not in VALID_MODELS:
         log_error(f"Nama model tidak valid: '{model_name}'. Pilihan: {', '.join(VALID_MODELS)}", exit_app=True)
 
@@ -110,9 +110,7 @@ def download_audio(url, output_path):
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
 def split_audio(input_path, output_dir, chunk_length_ms=3*60*60*1000):
-    """
-    Memecah audio menggunakan ffmpeg secara langsung untuk efisiensi maksimum.
-    """
+    # ... (logika split_audio tidak berubah)
     chunk_length_sec = chunk_length_ms / 1000
     log_info(f"Memecah audio menjadi potongan {chunk_length_sec} detik menggunakan ffmpeg...")
 
@@ -164,11 +162,7 @@ def split_audio(input_path, output_dir, chunk_length_ms=3*60*60*1000):
     return chunks, chunk_length_ms
 
 def shift_srt_time(file_path, offset_seconds, max_chunk_seconds):
-    """
-    Menggeser waktu file SRT dengan aman DAN membersihkan/memangkas 
-    stempel waktu yang melebihi durasi potongan maksimum.
-    """
-    
+    # ... (logika shift_srt_time tidak berubah)
     pattern = r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})"
     
     offset_duration = timedelta(seconds=offset_seconds)
@@ -247,12 +241,12 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
         
         output_base_path = Path(chunk).with_suffix("")
         
-        # *Catatan: Pastikan whisper-cli Anda mendukung semua flag ini*
+        # CATATAN: Saya mengembalikan `--temperature 0.4` tetapi DENGAN SINTAKS YANG BENAR
         cmd = [
             str(whisper_cli_path),
             "-m", str(model_path),
             "-f", chunk,
-            "-temperature", "0.4",
+            "--temperature", "0.4", # Diperbaiki dari `--temperature 0.4` menjadi 2 elemen
             "-of", str(output_base_path),
             "-otxt",
             "-osrt",
@@ -328,43 +322,26 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
     log_success(f"Output TXT: {final_txt}")
     log_success(f"Output SRT: {final_srt}")
 
-## 🚀 Fungsi Main Baru (Menggunakan `argparse`)
+## 🚀 Fungsi Main Baru (Menggunakan Argumen Posisi)
 def main():
-    # --- 1. Konfigurasi Argparse ---
-    parser = argparse.ArgumentParser(
-        description="Transkripsi audio dari file lokal atau URL menggunakan whisper.cpp.",
-        formatter_class=argparse.RawTextHelpFormatter # Untuk baris baru di opsi model
-    )
-
-    # Argumen wajib: File atau URL input
-    parser.add_argument(
-        "-f", "--file",
-        required=True,
-        help="Path ke file audio lokal ATAU URL audio (wajib)."
-    )
-    
-    # Argumen wajib: Model
-    parser.add_argument(
-        "-m", "--model",
-        required=True,
-        choices=VALID_MODELS, # Membatasi pilihan model
-        help=f"Nama model whisper.cpp yang akan digunakan (wajib).\n"
-            f"Pilihan: {', '.join(VALID_MODELS)}"
-    )
-    
-    args = parser.parse_args()
-    # --- 2. Mulai Logika Skrip ---
+    # Cek apakah jumlah argumen cukup (nama skrip + source + model = 3)
+    if len(sys.argv) < 3:
+        print("Usage: python3 transcriptor_cpp.py <url_or_file> <model>")
+        print(f"Model: {', '.join(VALID_MODELS)}")
+        sys.exit(1)
 
     try:
         # 1. Cek dependensi KETAT
         whisper_cli_path = check_dependencies()
 
-        # 2. Ambil model dari argumen & validasi model
-        source = args.file
-        model_name = args.model
-        model_path = ensure_model_exists(model_name) # ensure_model_exists sudah melakukan validasi
+        # 2. Ambil argumen posisi (source = index 1, model = index 2)
+        source = sys.argv[1]
+        model_name = sys.argv[2]
+        
+        # 3. Validasi model dan pastikan file ada/diunduh
+        model_path = ensure_model_exists(model_name)
 
-        # 3. Tentukan & unduh audio (dengan validasi)
+        # 4. Tentukan & unduh audio
         if os.path.exists(source):
             audio_path = Path(source)
             log_success(f"Menggunakan file lokal: {audio_path}")
@@ -373,7 +350,7 @@ def main():
             log_warn(f"Input berupa URL, mengunduh ke {audio_path}...")
             download_audio(source, audio_path)
 
-        # 4. Proses utama (dengan validasi)
+        # 5. Proses utama
         chunk_files, chunk_length_ms = split_audio(audio_path, "chunks")
         
         if not chunk_files:
