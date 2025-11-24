@@ -36,24 +36,12 @@ def check_dependencies():
     log_info("Memeriksa dependensi...")
     dependencies_ok = True
     
-    # Pydub tidak digunakan lagi, jadi tidak perlu cek ffmpeg/ffprobe
-    # Namun, pydub.utils.which digunakan, jadi kita biarkan cek dependency utamanya.
-    try:
-        from pydub.utils import which
-        if not which("curl"):
-            log_error("'curl' tidak ditemukan. Harap instal 'curl' untuk mengunduh file.")
-            dependencies_ok = False
+    # 1. Cek 'curl'
+    if subprocess.run(['which', 'curl'], capture_output=True).returncode != 0:
+        log_error("'curl' tidak ditemukan. Harap instal 'curl' untuk mengunduh file.")
+        dependencies_ok = False
         
-        # Cek ffmpeg dan ffprobe hanya jika pydub.utils.which berhasil diimpor (untuk curl)
-        # Kita hapus dependensi pydub/ffmpeg di sini karena split_audio telah dihapus.
-        pass 
-        
-    except ImportError:
-        # Jika pydub tidak terinstal, kita hanya akan menggunakan subprocess.
-        if not subprocess.run(['which', 'curl'], capture_output=True).stdout:
-            log_error("'curl' tidak ditemukan. Harap instal 'curl' untuk mengunduh file.")
-            dependencies_ok = False
-            
+    # 2. Cek 'whisper-cli'
     whisper_cli_path = Path("./build/bin/whisper-cli")
     if not whisper_cli_path.exists():
         log_error(f"'{whisper_cli_path}' tidak ditemukan. Pastikan Anda telah mengompilasi whisper.cpp.")
@@ -64,7 +52,7 @@ def check_dependencies():
         
     log_success("Semua dependensi (curl, whisper-cli) ditemukan.")
     return whisper_cli_path
-
+    
 def download_file(url, dest):
     """Mengunduh file menggunakan curl dengan penanganan error yang kuat."""
     log_info(f"Mengunduh: {url} → {dest}")
