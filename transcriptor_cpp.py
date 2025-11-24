@@ -135,18 +135,42 @@ def ensure_custom_model_exists(model_source):
 # Karena fungsi ini tidak disertakan, saya buat placeholder:
 def ensure_model_exists(model_name):
     """
-    Simulasi fungsi untuk model standar (-m). 
-    Asumsikan ia memanggil whisper-downloader atau sejenisnya.
+    Memastikan model standar ada. Jika tidak ada, model akan diunduh 
+    menggunakan URL yang diberikan (Hugging Face).
     """
-    model_path = Path(f"models/ggml-model-{model_name}.bin")
+    # Catatan: Skema penamaan file diubah menjadi ggml-{model}.bin
+    model_path = Path(f"models/ggml-{model_name}.bin") 
+
     if model_path.exists():
         log_success(f"Model standar ditemukan: {model_path}")
         return model_path
+        
     elif model_name in VALID_MODELS:
-        log_error(f"Model standar '{model_name}' tidak ditemukan di {model_path}. Harap unduh menggunakan skrip terpisah.", exit_app=True)
+        
+        # --- LOGIKA DOWNLOAD OTOMATIS BARU DENGAN URL ANDA ---
+        
+        BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/raw/main/"
+        model_filename = f"ggml-{model_name}.bin"
+        download_url = BASE_URL + model_filename
+        
+        log_warn(f"Model standar '{model_name}' tidak ditemukan di {model_path}.")
+        log_info(f"Mencoba mengunduh model dari: {download_url}")
+        
+        # Pastikan folder models ada sebelum mengunduh
+        os.makedirs("models", exist_ok=True)
+        
+        # Memanggil fungsi download yang sudah ada di skrip Anda
+        if download_file(download_url, model_path):
+             log_success(f"Model standar '{model_name}' berhasil diunduh.")
+             return model_path
+        else:
+             # Jika download_file gagal, hentikan skrip.
+             log_error("Gagal mengunduh model standar. Periksa koneksi atau URL.", exit_app=True)
+        
+        # --- AKHIR LOGIKA DOWNLOAD BARU ---
+        
     else:
         log_error(f"Nama model standar tidak valid: {model_name}. Model yang valid: {', '.join(VALID_MODELS)}", exit_app=True)
-        
 # --- Fungsi lainnya (Tidak Berubah Signifikan) ---
 
 def download_audio(url, output_path):
@@ -294,7 +318,7 @@ def transcribe_with_whisper_cpp(chunk_files, model_path, chunk_length_ms, whispe
             str(whisper_cli_path),
             "-m", str(model_path), # <--- Menggunakan model_path yang ditentukan
             "-f", chunk,
-            "--temperature", "1.0",
+            "--temperature", "0.4",
             "-of", str(output_base_path),
             "-otxt",
             "-osrt",
