@@ -41,7 +41,12 @@ def check_dependencies():
         log_error("'curl' tidak ditemukan. Harap instal 'curl' untuk mengunduh file.")
         dependencies_ok = False
         
-    # 2. Cek 'whisper-cli'
+    # 2. Cek 'ffmpeg' (BARU: Diperlukan untuk denoising)
+    if subprocess.run(['which', 'ffmpeg'], capture_output=True).returncode != 0:
+        log_error("'ffmpeg' tidak ditemukan. Harap instal 'ffmpeg' untuk pembersihan audio.")
+        dependencies_ok = False
+        
+    # 3. Cek 'whisper-cli'
     whisper_cli_path = Path("./build/bin/whisper-cli")
     if not whisper_cli_path.exists():
         log_error(f"'{whisper_cli_path}' tidak ditemukan. Pastikan Anda telah mengompilasi whisper.cpp.")
@@ -50,10 +55,11 @@ def check_dependencies():
     if not dependencies_ok:
         log_error("Dependensi tidak lengkap. Keluar.", exit_app=True)
         
-    log_success("Semua dependensi (curl, whisper-cli) ditemukan.")
+    log_success("Semua dependensi (curl, ffmpeg, whisper-cli) ditemukan.")
     return whisper_cli_path
     
 def download_file(url, dest):
+    # FUNGSI download_file (TIDAK BERUBAH)
     """Mengunduh file menggunakan curl dengan penanganan error yang kuat."""
     log_info(f"Mengunduh: {url} → {dest}")
     try:
@@ -75,8 +81,8 @@ def download_file(url, dest):
         return False
 
 def ensure_model_exists(model_name):
+    # FUNGSI ensure_model_exists (TIDAK BERUBAH)
     """Memastikan model ada, memvalidasi nama, dan mengunduh jika perlu."""
-    # VALIDASI MODEL (TIDAK BERUBAH)
     if model_name not in VALID_MODELS:
         log_error(f"Nama model tidak valid: '{model_name}'. Pilihan: {', '.join(VALID_MODELS)}", exit_app=True)
 
@@ -97,16 +103,52 @@ def ensure_model_exists(model_name):
     return model_path
 
 def download_audio(url, output_path):
+    # FUNGSI download_audio (TIDAK BERUBAH)
     """Wrapper untuk mengunduh file audio."""
     log_info(f"Mengunduh audio dari: {url}")
     if not download_file(url, output_path):
         log_error("Gagal mengunduh audio. Membatalkan.", exit_app=True)
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
-# Hapus fungsi split_audio
-# Hapus fungsi shift_srt_time
+# --- FUNGSI BARU UNTUK PENYEMPURNAAN AUDIO ---
+def denoise_audio(input_path, output_path):
+    """
+    Membersihkan noise pada file audio menggunakan FFmpeg (filter afftdn).
+    Mengubah audio ke format WAV mono 16kHz (format yang disukai Whisper).
+    """
+    log_info(f"Memulai penyempurnaan audio (denoising) pada: {input_path.name}")
+    
+    # Perintah FFmpeg:
+    # -i: Input
+    # -af 'afftdn': Filter Advanced Frequency-Domain Noise Reduction
+    # -ac 1: Mono (Saluran tunggal)
+    # -ar 16000: Sample rate 16kHz
+    # -y: Timpa file output jika sudah ada
+    cmd = [
+        "ffmpeg",
+        "-i", str(input_path),
+        "-af", "afftdn=nf=4:tn=3", # Nilai filter yang umum digunakan
+        "-ac", "1",
+        "-ar", "16000",
+        "-y", 
+        str(output_path)
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log_success(f"Penyempurnaan audio selesai. Output: {output_path.name}")
+        return True
+    except subprocess.CalledProcessError as e:
+        log_error(f"FFmpeg gagal saat denoising (return code: {e.returncode}).", exit_app=False)
+        log_error("Periksa apakah FFmpeg terinstal dengan benar dan file input valid.")
+        return False
+    except Exception as e:
+        log_error(f"Error tak terduga saat menjalankan FFmpeg: {e}")
+        return False
+# -----------------------------------------------
 
 def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
+    # FUNGSI transcribe_single_audio (TIDAK BERUBAH)
     """Mentranskripsi seluruh file audio tunggal menggunakan whisper.cpp CLI."""
     os.makedirs("transcripts", exist_ok=True)
 
@@ -124,7 +166,6 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
     # Nama file output sementara di direktori saat ini
     output_base_path_temp = Path(audio_path.stem)
     
-    # CATATAN: Menggunakan --temperature 0.6 seperti sebelumnya
     cmd = [
         str(whisper_cli_path),
         "-m", str(model_path),
@@ -164,7 +205,6 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
     temp_srt_file = output_base_path_temp.with_suffix(".srt")
     try:
         if temp_srt_file.exists():
-            # Cukup salin kontennya, tidak perlu ada re-indexing atau shifting karena ini file tunggal
             content = temp_srt_file.read_text(encoding="utf-8").strip()
             final_srt.write_text(content, encoding="utf-8")
             temp_srt_file.unlink()
@@ -176,7 +216,7 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
 
     log_success("Transkripsi file tunggal selesai.")
 
-## 🚀 Fungsi Main Baru (Menggunakan Argumen Posisi)
+## 🚀 Fungsi Main yang Dimodifikasi
 def main():
     # Cek apakah jumlah argumen cukup (nama skrip + source + model = 3)
     if len(sys.argv) < 3:
@@ -196,20 +236,34 @@ def main():
         model_path = ensure_model_exists(model_name)
 
         # 4. Tentukan & unduh audio
+        original_audio_path = Path("original_audio.mp3") # Nama default untuk audio yang diunduh/diproses
+        
         if os.path.exists(source):
-            audio_path = Path(source)
-            log_success(f"Menggunakan file lokal: {audio_path}")
+            # Jika input adalah file lokal, gunakan Path(source) sebagai audio_path sementara
+            log_success(f"Menggunakan file lokal: {source}")
+            audio_path_to_process = Path(source)
         else:
-            # Karena pydub sudah tidak diimpor, kita harus pastikan nama file output aman
-            # Jika user memberikan URL, kita unduh ke 'audio.mp3'
-            audio_path = Path("audio.mp3") 
-            log_warn(f"Input berupa URL, mengunduh ke {audio_path}...")
-            download_audio(source, audio_path)
+            # Jika input adalah URL, unduh ke 'original_audio.mp3'
+            log_warn(f"Input berupa URL, mengunduh ke {original_audio_path}...")
+            download_audio(source, original_audio_path)
+            audio_path_to_process = original_audio_path
 
-        # 5. Proses utama (Hanya transkripsi file tunggal)
-        # Hapus panggilan split_audio
-        transcribe_single_audio(audio_path, model_path, whisper_cli_path)
+        # 5. BARU: Penyempurnaan Audio (Denoising)
+        denoised_audio_path = Path(f"denoised_{audio_path_to_process.stem}.wav")
+        if not denoise_audio(audio_path_to_process, denoised_audio_path):
+            log_error("Gagal melakukan penyempurnaan audio. Keluar.", exit_app=True)
 
+        # 6. Proses utama: Transkripsi file yang telah dibersihkan
+        transcribe_single_audio(denoised_audio_path, model_path, whisper_cli_path)
+
+        # 7. Pembersihan file audio sementara (Opsional)
+        if original_audio_path.exists():
+            original_audio_path.unlink()
+        if denoised_audio_path.exists():
+            denoised_audio_path.unlink()
+        if os.path.exists(source) and str(Path(source)) == str(audio_path_to_process):
+             log_info("File audio lokal asli TIDAK dihapus.")
+        
         log_success("====== PROSES SELESAI ======")
         log_info("Output akhir ada di folder ./transcripts/")
 
