@@ -129,7 +129,7 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
         str(whisper_cli_path),
         "-m", str(model_path),
         "-f", str(audio_path),
-        "--temperature", "0.8",
+        "--temperature", "1.0",
         "-of", str(output_base_path_temp), # Output sementara di root
         "-otxt",
         "-osrt",
