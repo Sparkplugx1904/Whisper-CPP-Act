@@ -24,10 +24,10 @@ jobs:
           cd ..
           rm -rf temp_whisper
 
-      # # 2️⃣ Setup FFmpeg
-      # - name: Setup FFmpeg
-      #   continue-on-error: true
-      #   uses: FedericoCarboni/setup-ffmpeg@v3
+      # 2️⃣ Setup FFmpeg
+      - name: Setup FFmpeg
+        continue-on-error: true
+        uses: FedericoCarboni/setup-ffmpeg@v3
 
       # # 2️⃣ Setup FFmpeg
       # - name: Setup FFmpeg
@@ -42,7 +42,7 @@ jobs:
       # 3️⃣ Install dependencies
       - name: Install Python dependencies
         run: |
-          pip install requests pydub 
+          pip install requirements.txt
 
       # 4️⃣ Transcribe audio
       - name: Run transcriptor CPP
