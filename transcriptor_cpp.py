@@ -214,19 +214,17 @@ def transcribe_single_audio(audio_path: Path, model_path: Path, whisper_cli_path
     
     try:
         # Menjalankan whisper-cli
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8')
+        # PERUBAHAN UTAMA: capture_output=False agar output stdout/stderr langsung ke konsol.
+        result = subprocess.run(cmd, check=True, capture_output=False)
         print() # Newline setelah output whisper
-        if result.stdout:
-            log_info("Output whisper-cli (stdout): [Tersensor untuk ringkasan]")
-            # print(result.stdout) # Tampilkan jika perlu debug
-        if result.stderr:
-            log_info(f"Output whisper-cli (stderr): {result.stderr[:500]}...")
             
     except subprocess.CalledProcessError as e:
         print() # Newline setelah output whisper
+        # Karena capture_output=False, e.stdout dan e.stderr mungkin kosong.
+        # Output error harus sudah terlihat di konsol.
         log_error(f"whisper-cli GAGAL (return code: {e.returncode}).", exit_app=False)
-        log_error(f"whisper-cli STDOUT: {e.stdout}")
-        log_error(f"whisper-cli STDERR: {e.stderr}")
+        # log_error(f"whisper-cli STDOUT: {e.stdout}") # Dihapus
+        # log_error(f"whisper-cli STDERR: {e.stderr}") # Dihapus
         log_error("Gagal melakukan transkripsi. Proses dihentikan.", exit_app=True)
     except Exception as e:
         log_error(f"Error tak terduga saat menjalankan whisper-cli pada {audio_path.name}: {e}", exit_app=True)
