@@ -26,8 +26,6 @@ try:
     # Hanya impor pustaka yang tersisa
     import numpy as np
     print("--- [DEBUG] Pustaka 'numpy' berhasil diimpor.")
-    # SciPy hanya dibutuhkan jika Anda mengimplementasikan pemrosesan audio (misalnya normalisasi)
-    # Karena kita menghapus noisereduce, SciPy juga dihapus.
 except ImportError as e:
     print(f"[✗✗✗] FATAL: GAGAL MENGIMPOR PUSTAKA PENTING: {e}", file=sys.stderr)
     print("[✗✗✗] FATAL: Pastikan Anda telah menjalankan 'pip install -r requirements.txt' (minimal numpy)", file=sys.stderr)
@@ -100,8 +98,6 @@ def download_file(url: str, dest: Path) -> bool:
     log_info(f"Mengunduh: {url} → {dest}")
     os.makedirs(dest.parent, exist_ok=True) # Pastikan folder tujuan ada
     try:
-        # Menghilangkan bendera -L pada curl, yang bisa menyebabkan masalah pada beberapa server
-        # Namun, kita tambahkan -f (Fail fast)
         subprocess.run(
             ["curl", "-f", "-L", "-o", str(dest), "-m", "600", url], # Batas waktu 10 menit untuk model besar
             check=True
@@ -155,7 +151,8 @@ def ensure_model_exists(model_name: str, custom_model_url: Optional[str]) -> Pat
             return model_path
         
         log_warn(f"Model standar '{model_name}' belum ada, mengunduh dari HuggingFace...")
-        url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"    
+        # BARIS INI TELAH DIPERBAIKI (Penghapusan U+00A0 di akhir baris)
+        url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin" 
         if not download_file(url, model_path):
             log_error("Gagal mengunduh model standar. Membatalkan.", exit_app=True)
             
