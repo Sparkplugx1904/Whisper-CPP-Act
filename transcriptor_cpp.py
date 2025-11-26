@@ -72,14 +72,7 @@ def check_dependencies():
     else:
         log_info("Dependensi 'curl' ditemukan.")
         
-    # 2. Cek 'ffmpeg' (DIPERLUKAN untuk konversi format awal)
-    if subprocess.run(['which', 'ffmpeg'], capture_output=True).returncode != 0:
-        log_error("'ffmpeg' tidak ditemukan. Harap instal 'ffmpeg' untuk konversi audio.")
-        dependencies_ok = False
-    else:
-        log_info("Dependensi 'ffmpeg' ditemukan.")
-        
-    # 3. Cek 'whisper-cli'
+    # 2. Cek 'whisper-cli'
     whisper_cli_path = Path("./build/bin/whisper-cli")
     if not whisper_cli_path.exists():
         log_error(f"'{whisper_cli_path}' tidak ditemukan. Pastikan Anda telah mengompilasi whisper.cpp.")
@@ -90,7 +83,7 @@ def check_dependencies():
     if not dependencies_ok:
         log_error("Dependensi tidak lengkap. Keluar.", exit_app=True)
         
-    log_success("Semua dependensi (curl, ffmpeg, whisper-cli) ditemukan.")
+    log_success("Semua dependensi (curl, whisper-cli) ditemukan. (Catatan: whisper.cpp harus dikompilasi dengan dukungan FFmpeg untuk audio non-WAV)")
     return whisper_cli_path
     
 def download_file(url: str, dest: Path) -> bool:
@@ -151,7 +144,6 @@ def ensure_model_exists(model_name: str, custom_model_url: Optional[str]) -> Pat
             return model_path
         
         log_warn(f"Model standar '{model_name}' belum ada, mengunduh dari HuggingFace...")
-        # BARIS INI TELAH DIPERBAIKI (Penghapusan U+00A0 di akhir baris)
         url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin" 
         if not download_file(url, model_path):
             log_error("Gagal mengunduh model standar. Membatalkan.", exit_app=True)
@@ -167,31 +159,9 @@ def download_audio(url: str, output_path: Path):
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
 # -----------------------------------------------------
-# TAHAP 1: KONVERSI OLEH FFMPEG (Persiapan Audio untuk Whisper)
+# FUNGSI KONVERSI FFmpeg (DIHAPUS SESUAI PERMINTAAN)
 # -----------------------------------------------------
 
-def prepare_audio_for_whisper(input_path: Path, output_path: Path) -> Path:
-    """Mengonversi file audio ke WAV Mono 16kHz menggunakan FFmpeg."""
-    log_info(f"Mengonversi {input_path.name} ke WAV Mono 16kHz (format yang dibutuhkan Whisper)...")
-    
-    cmd = [
-        "ffmpeg", "-i", str(input_path), 
-        "-ac", "1", "-ar", "16000", "-y", 
-        str(output_path)
-    ]
-    log_info(f"Menjalankan FFmpeg: {' '.join(cmd)}")
-    try:
-        # Menampilkan output stderr dari FFmpeg jika terjadi error
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8')
-        # log_info(f"Output FFmpeg: {result.stderr[:200]}...")
-        log_success("Konversi awal selesai.")
-        return output_path
-    except subprocess.CalledProcessError as e:
-        log_error(f"FFmpeg GAGAL konversi ke WAV. Error: {e.stderr}", exit_app=True)
-    except Exception as e:
-        log_error(f"Gagal konversi ke WAV Mono 16kHz menggunakan FFmpeg: {e}", exit_app=True)
-        
-    return output_path # Dummy return, sebenarnya akan keluar jika ada error
 
 # -----------------------------------------------------
 # TAHAP 2: FUNGSI TRANSKRIPSI
@@ -200,7 +170,7 @@ def prepare_audio_for_whisper(input_path: Path, output_path: Path) -> Path:
 def transcribe_single_audio(audio_path: Path, model_path: Path, whisper_cli_path: Path):
     """
     Mentranskripsi seluruh file audio tunggal menggunakan whisper.cpp CLI.
-    BUG FIX: Pastikan file output sementara dipindahkan dengan benar.
+    Sekarang, file audio akan diteruskan langsung ke whisper-cli.
     """
     os.makedirs("transcripts", exist_ok=True)
     log_info("Memastikan folder 'transcripts' ada.")
@@ -211,8 +181,7 @@ def transcribe_single_audio(audio_path: Path, model_path: Path, whisper_cli_path
     
     # Tentukan nama file output sementara yang akan dibuat oleh whisper-cli di CWD
     # Ini harus sesuai dengan stem dari audio_path yang diteruskan ke CLI.
-    # audio_path adalah 'processed_audio.wav', jadi stem-nya adalah 'processed_audio'.
-    output_base_path_temp = audio_path.stem # 'processed_audio'
+    output_base_path_temp = audio_path.stem 
     temp_txt_file = Path(output_base_path_temp).with_suffix(".txt")
     temp_srt_file = Path(output_base_path_temp).with_suffix(".srt")
 
@@ -233,7 +202,7 @@ def transcribe_single_audio(audio_path: Path, model_path: Path, whisper_cli_path
         "-m", str(model_path),
         "-f", str(audio_path),
         "--temperature", "0.6",
-        # Gunakan output_base_path_temp (processed_audio) sebagai dasar nama file output 
+        # Gunakan output_base_path_temp sebagai dasar nama file output 
         "-of", str(output_base_path_temp), 
         "-otxt",
         "-osrt",
@@ -324,11 +293,9 @@ def main():
 
     # Path file sementara
     original_audio_path = Path("original_audio_download") 
-    converted_wav_path = Path("processed_audio.wav") 
     
     # Variabel untuk pembersihan
     audio_path_to_process = None
-    final_processed_audio_path = None
     is_source_url = not os.path.exists(args.source)
     
     try:
@@ -349,14 +316,12 @@ def main():
             log_info(f"Menggunakan file lokal: {args.source}")
             audio_path_to_process = Path(args.source)
 
-        print("--- [DEBUG] TAHAP 1: PERSIAPAN AUDIO (FFMPEG) ---")
-        # Output dari persiapan audio akan menjadi input untuk transkripsi
-        final_processed_audio_path = prepare_audio_for_whisper(audio_path_to_process, converted_wav_path)
+        print("--- [DEBUG] TAHAP 1: PERSIAPAN AUDIO (KONVERSI FFmpeg DIHAPUS) ---")
+        log_info("Langsung meneruskan file audio asli ke whisper-cli.")
         
-        # NOTE: TAHAP 2 (Denoising & Normalisasi) DIHAPUS
-
         print("--- [DEBUG] TAHAP 3: TRANSKRIPSI ---")
-        transcribe_single_audio(final_processed_audio_path, model_path, whisper_cli_path)
+        # Meneruskan audio_path_to_process (file asli/yang diunduh) langsung
+        transcribe_single_audio(audio_path_to_process, model_path, whisper_cli_path)
         
     except Exception as e:
         log_error(f"Terjadi error fatal yang tidak terduga: {e}", exit_app=False)
@@ -368,14 +333,6 @@ def main():
     finally:
         # TAHAP 4: PEMBERSIHAN
         print("--- [DEBUG] TAHAP 4: Memulai pembersihan file sementara... ---")
-        
-        # Hapus file WAV yang diproses (processed_audio.wav)
-        if final_processed_audio_path and final_processed_audio_path.exists():
-            try:
-                final_processed_audio_path.unlink()
-                log_info(f"Berhasil menghapus: {final_processed_audio_path}")
-            except Exception as e:
-                log_warn(f"Gagal menghapus {final_processed_audio_path}: {e}")
         
         # Hapus file audio asli yang diunduh (jika source adalah URL)
         if is_source_url and original_audio_path.exists():
