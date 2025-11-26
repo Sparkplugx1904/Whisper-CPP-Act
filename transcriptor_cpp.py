@@ -129,8 +129,7 @@ def ensure_model_exists(model_name):
         return model_path
     
     log_warn(f"Model '{model_name}' belum ada, mengunduh dari HuggingFace...")
-    url = f"https.huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"
-    
+    url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"    
     if not download_file(url, model_path):
         log_error("Gagal mengunduh model. Membatalkan.", exit_app=True)
         
