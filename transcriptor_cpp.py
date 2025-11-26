@@ -11,7 +11,7 @@ import noisereduce as nr
 from typing import List, Tuple
 
 # --- Sistem Logging Kustom ---
-
+# (Fungsi log_info, log_success, log_warn, log_error tidak berubah)
 def log_info(msg):
     """Mencatat pesan informasi."""
     print(f"[+] {msg}")
@@ -45,9 +45,9 @@ def check_dependencies():
         log_error("'curl' tidak ditemukan. Harap instal 'curl' untuk mengunduh file.")
         dependencies_ok = False
         
-    # 2. Cek 'ffmpeg' (KEMBALI DIPERLUKAN untuk konversi dan stabilisasi volume/loudnorm)
+    # 2. Cek 'ffmpeg' (KEMBALI DIPERLUKAN untuk konversi format)
     if subprocess.run(['which', 'ffmpeg'], capture_output=True).returncode != 0:
-        log_error("'ffmpeg' tidak ditemukan. Harap instal 'ffmpeg' untuk konversi audio dan stabilisasi volume.")
+        log_error("'ffmpeg' tidak ditemukan. Harap instal 'ffmpeg' untuk konversi audio.")
         dependencies_ok = False
         
     # 3. Cek 'whisper-cli'
@@ -72,7 +72,7 @@ def check_dependencies():
     log_success("Semua dependensi (curl, ffmpeg, whisper-cli, pustaka Python) ditemukan.")
     return whisper_cli_path
     
-# --- Fungsi download_file, ensure_model_exists, download_audio tetap sama ---
+# --- Fungsi download_file, ensure_model_exists, download_audio (Tidak Berubah) ---
 def download_file(url, dest):
     """Mengunduh file menggunakan curl dengan penanganan error yang kuat."""
     log_info(f"Mengunduh: {url} → {dest}")
@@ -123,14 +123,13 @@ def download_audio(url, output_path):
     log_success(f"Audio berhasil diunduh ke {output_path}")
 
 # -----------------------------------------------------
-# FUNGSI BARU: KONVERSI OLEH FFMPEG (Bug Fix untuk MP3)
+# TAHAP 1: KONVERSI OLEH FFMPEG (Hanya Konversi Format)
 # -----------------------------------------------------
 
 def convert_to_wav(input_path: Path, output_path: Path) -> Path:
     """Mengonversi file audio (MP3/M4A/dll) ke WAV Mono 16kHz menggunakan FFmpeg."""
     log_info(f"Mengonversi {input_path.name} ke WAV Mono 16kHz...")
     
-    # Pastikan format WAV mono 16kHz untuk NumPy/SciPy/Whisper
     cmd = [
         "ffmpeg", "-i", str(input_path), 
         "-ac", "1", "-ar", "16000", "-y", 
@@ -158,19 +157,18 @@ def read_and_prepare_audio(input_path: Path) -> Tuple[int, np.ndarray]:
         log_error(f"Gagal membaca file WAV yang telah dikonversi: {e}", exit_app=True)
 
 # -----------------------------------------------------
-# FUNGSI BARU: PEMROSESAN AUDIO GABUNGAN (DENOISE + LOUDNORM Penuh)
+# TAHAP 2: PEMROSESAN AUDIO (DENOISE + NORMALISASI PYTHON)
 # -----------------------------------------------------
 
 def process_and_normalize_audio(input_data: np.ndarray, rate: int, output_base_path: Path) -> Path:
     """
     1. Melakukan Denoising (noisereduce, Python murni).
-    2. Melakukan Normalisasi Loudnorm (FFmpeg) pada seluruh file.
+    2. Melakukan Normalisasi Puncak (NumPy, Python murni).
     """
     
     # 1. Denoising dengan noisereduce (Python Murni)
     log_info("1. Melakukan Denoising pada seluruh file audio (noisereduce)...")
     
-    # Tentukan sampel noise (Asumsi 1 detik pertama adalah noise murni).
     noise_len_sec = min(1.0, len(input_data) / rate) 
     noise_sample = input_data[:int(rate * noise_len_sec)]
     
@@ -182,49 +180,47 @@ def process_and_normalize_audio(input_data: np.ndarray, rate: int, output_base_p
     )
     log_success("Denoising selesai.")
 
-    # 2. Loudnorm (Stabilisasi Volume) menggunakan FFmpeg pada seluruh file
-    log_info("2. Melakukan Normalisasi Loudnorm pada seluruh file (FFmpeg)...")
+    # 2. Normalisasi Puncak Statis (NumPy) - MENGGANTIKAN LOUDNORM
+    log_info("2. Melakukan Normalisasi Puncak Statis (NumPy) pada seluruh file...")
     
-    temp_wav_path = output_base_path.with_suffix(".temp.wav")
+    peak_value = np.max(np.abs(denoised_data))
+    
+    if peak_value > 0:
+        # Target puncak di -1.0 dBFS untuk menghindari clipping (gunakan 0.89)
+        scaling_factor = 0.89 / peak_value
+        normalized_data = denoised_data * scaling_factor
+        log_info(f"Volume disesuaikan dengan faktor: {scaling_factor:.2f}")
+    else:
+        normalized_data = denoised_data
+        log_warn("Nilai puncak audio nol, tidak ada normalisasi yang dilakukan.")
+
+    # 3. Menyimpan Hasil
+    # Kita menggunakan kembali path dari 'output_base_path' (converted_wav_path)
     final_processed_path = output_base_path.with_suffix(".wav")
+    log_info(f"3. Menyimpan hasil denoising dan normalisasi ke {final_processed_path.name}...")
     
-    # Tulis segmen yang telah di-denoising ke file sementara untuk Loudnorm FFmpeg
-    # Menggunakan int16 untuk penulisan wavfile
-    wavfile.write(temp_wav_path, rate, (denoised_data * 32767).astype(np.int16))
-    
-    # Loudnorm (Stabilisasi Volume) menggunakan FFmpeg pada file tunggal
-    # I=-23 LUFS adalah target standar
-    cmd_loudnorm = [
-        "ffmpeg", "-i", str(temp_wav_path), "-y",
-        "-ac", "1", "-ar", "16000",
-        "-af", "loudnorm=I=-23:LRA=7:tp=-2", # Hapus print_format=json
-        str(final_processed_path)
-    ]
+    output_int16 = (normalized_data * 32767).astype(np.int16)
     
     try:
-        subprocess.run(cmd_loudnorm, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log_success(f"Loudnorm selesai dan disimpan ke: {final_processed_path.name}")
+        wavfile.write(final_processed_path, rate, output_int16)
+        log_success(f"Pemrosesan Selesai dan disimpan: {final_processed_path.name}")
         return final_processed_path
-    except subprocess.CalledProcessError as e:
-        log_error(f"FFmpeg Loudnorm gagal. Code: {e.returncode}. Pastikan FFmpeg mendukung filter loudnorm.", exit_app=True)
-    finally:
-        if temp_wav_path.exists():
-            temp_wav_path.unlink() # Hapus file sementara hasil denoising
+    except Exception as e:
+        log_error(f"Gagal menyimpan file audio akhir: {e}", exit_app=True)
+
 
 def cleanup_segments(temp_dir: Path):
-    """Menghapus semua file dan folder sementara."""
-    # Dikembalikan untuk memastikan tidak ada folder sisa dari eksperimen sebelumnya
+    """Membersihkan folder segmen jika ada (sisa dari proses lama)."""
     try:
         if temp_dir.exists():
             for item in temp_dir.iterdir():
                 item.unlink()
             temp_dir.rmdir()
-            log_info("Pembersihan file sementara selesai.")
-    except Exception as e:
-        log_warn(f"Gagal membersihkan direktori sementara {temp_dir}: {e}")
+    except Exception:
+        pass # Abaikan jika gagal
 
 # -----------------------------------------------------
-# FUNGSI transcribe_single_audio (Tidak Berubah)
+# TAHAP 3: FUNGSI TRANSKRIPSI (Tidak Berubah)
 # -----------------------------------------------------
 
 def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
@@ -242,6 +238,7 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
 
     log_info(f"Mentranskripsi file tunggal: {audio_path.name}")
     
+    # Gunakan nama file input yang diproses sebagai dasar output
     output_base_path_temp = Path(audio_path.stem)
     
     cmd = [
@@ -274,8 +271,8 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
             final_txt.write_text(content, encoding="utf-8")
             temp_txt_file.unlink()
             log_success(f"TXT berhasil disimpan ke {final_txt}.")
-        # ... (Kode SRT dan penanganan error tetap sama) ...
-        
+        else:
+            log_warn(f"File TXT output tidak ditemukan: {temp_txt_file}")
     except Exception as e:
         log_error(f"Gagal memproses file TXT {temp_txt_file}: {e}")
 
@@ -294,7 +291,7 @@ def transcribe_single_audio(audio_path, model_path, whisper_cli_path):
     log_success("Transkripsi file tunggal selesai.")
 
 # -----------------------------------------------------
-# FUNGSI MAIN BARU
+# FUNGSI MAIN BARU (Alur Hibrida)
 # -----------------------------------------------------
 
 def main():
@@ -306,7 +303,6 @@ def main():
     temp_segment_dir = Path("./temp_segments")
 
     try:
-        # PENTING: Perbaiki bug ini dulu (jika ini penyebab program berhenti)
         whisper_cli_path = check_dependencies()
         source = sys.argv[1]
         model_name = sys.argv[2]
@@ -328,7 +324,8 @@ def main():
         # TAHAP 2: MEMBACA DAN MEMPERSIAPKAN (PYTHON MURNI)
         rate, data = read_and_prepare_audio(converted_wav_path)
         
-        # TAHAP 3: DENOISING & LOUDNORM (PYTHON + FFMPEG FULL FILE)
+        # TAHAP 3: DENOISING & NORMALISASI (PYTHON MURNI)
+        # Kita menimpa file 'converted_wav_path' dengan versi yang sudah diproses
         final_processed_audio_path = process_and_normalize_audio(data, rate, converted_wav_path)
 
         # TAHAP 4: TRANSKRIPSI
@@ -345,11 +342,10 @@ def main():
         # TAHAP 5: PEMBERSIHAN
         cleanup_segments(temp_segment_dir)
         if 'final_processed_audio_path' in locals() and final_processed_audio_path.exists():
-             final_processed_audio_path.unlink() # Hapus file WAV hasil pemrosesan akhir
-        if 'converted_wav_path' in locals() and converted_wav_path.exists():
-            converted_wav_path.unlink() # Hapus file WAV yang dikonversi
+             final_processed_audio_path.unlink() # Menghapus file WAV hasil pemrosesan akhir
+        # 'converted_wav_path' adalah path yang sama dengan 'final_processed_audio_path'
         if 'original_audio_path' in locals() and original_audio_path.exists():
-            original_audio_path.unlink() # Hapus file yang diunduh dari URL
+            original_audio_path.unlink() # Menghapus file yang diunduh dari URL
         
         log_success("====== PROSES SELESAI TOTAL ======")
         log_info("Output akhir ada di folder ./transcripts/")
